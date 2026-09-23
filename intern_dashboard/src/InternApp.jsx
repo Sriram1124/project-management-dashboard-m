@@ -1,0 +1,400 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  LayoutDashboard, 
+  FolderKanban, 
+  CheckSquare, 
+  FileText, 
+  CalendarCheck, 
+  MessageSquare, 
+  User, 
+  LogOut, 
+  Bell, 
+  Search, 
+  ArrowLeft,
+  ChevronRight,
+  ShieldAlert,
+  ArrowRightLeft
+} from 'lucide-react';
+
+import InternDashboardTab from './components/InternDashboardTab';
+import MyProjectsTab from './components/MyProjectsTab';
+import ScopedProjectView from './components/ScopedProjectView';
+import MyTasksTab from './components/MyTasksTab';
+import AssignedFormsTab from './components/AssignedFormsTab';
+import InternAttendanceTab from './components/InternAttendanceTab';
+import InternMomTab from './components/InternMomTab';
+import InternProfileTab from './components/InternProfileTab';
+import DynamicFormModal from './components/DynamicFormModal';
+import WorkItemDetailModal from './components/WorkItemDetailModal';
+import CreatePersonalTaskModal from './components/CreatePersonalTaskModal';
+import NotificationsDrawer from './components/NotificationsDrawer';
+
+import { userService } from './services/userService';
+import { projectsService } from './services/projectsService';
+import { workItemsService } from './services/workItemsService';
+import { formsService } from './services/formsService';
+import { notificationsService } from './services/notificationsService';
+
+export default function InternApp({ onLogout, onSelectProject, onToast }) {
+  const [currentTab, setCurrentTab] = useState('dashboard');
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [workItems, setWorkItems] = useState(workItemsService.getAllWorkItems());
+  const [forms, setForms] = useState(formsService.getAssignedForms());
+  const [notifications, setNotifications] = useState(notificationsService.getAllNotifications());
+
+  // Modal states
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [selectedForm, setSelectedForm] = useState(null);
+  const [isCreatePersonalOpen, setIsCreatePersonalOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+
+  const currentUser = userService.getCurrentUser();
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const pendingFormsCount = forms.filter((f) => f.submission_status === 'PENDING').length;
+
+  useEffect(() => {
+    const unsubTasks = workItemsService.subscribe(setWorkItems);
+    const unsubForms = formsService.subscribe(setForms);
+    const unsubNotifs = notificationsService.subscribe(setNotifications);
+
+    return () => {
+      unsubTasks();
+      unsubForms();
+      unsubNotifs();
+    };
+  }, []);
+
+  const handleToggleTask = (taskId) => {
+    workItemsService.toggleComplete(taskId);
+    const item = workItemsService.getWorkItemById(taskId);
+    if (item) {
+      onToast?.(
+        item.status === 'COMPLETED'
+          ? `Marked "${item.title}" completed!`
+          : `Reopened "${item.title}"`
+      );
+    }
+  };
+
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'projects', label: 'My Projects', icon: FolderKanban },
+    { id: 'tasks', label: 'My Tasks', icon: CheckSquare, badge: workItems.filter(w => w.status !== 'COMPLETED').length },
+    { id: 'forms', label: 'Forms', icon: FileText, badge: pendingFormsCount, badgeColor: 'bg-amber-500' },
+    { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
+    { id: 'mom', label: 'MoM', icon: MessageSquare },
+    { id: 'profile', label: 'Profile', icon: User },
+  ];
+
+  const getBreadcrumbTitle = () => {
+    switch (currentTab) {
+      case 'dashboard':
+        return 'Intern Workstation';
+      case 'projects':
+        if (selectedProjectId) {
+          const p = projectsService.getProjectById(selectedProjectId);
+          return `My Assigned Projects / ${p?.name || 'Workspace'}`;
+        }
+        return 'My Assigned Projects';
+      case 'tasks':
+        return 'Task & Subtask Board';
+      case 'forms':
+        return 'Assigned Evaluations & Forms';
+      case 'attendance':
+        return 'Attendance & Session History';
+      case 'mom':
+        return 'Published Minutes of Meeting';
+      case 'profile':
+        return 'Intern Profile & Privileges';
+      default:
+        return 'Intern Portal';
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex bg-[#F7F8FC] font-sans antialiased text-slate-800 selection:bg-purple-200">
+      {/* 1. DEDICATED INTERN SIDEBAR */}
+      <aside className="w-60 bg-[#4C1D95] text-slate-200 flex flex-col justify-between shrink-0 select-none min-h-screen sticky top-0 border-r border-purple-900/40">
+        <div className="flex flex-col">
+          {/* Brand Header */}
+          <div className="h-14 flex items-center justify-between px-4 border-b border-purple-800/60 bg-purple-950/30">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-md bg-purple-500/20 border border-purple-400/30 flex items-center justify-center text-white font-bold text-xs tracking-wider">
+                IH
+              </div>
+              <div className="flex flex-col leading-tight">
+                <span className="font-bold text-sm tracking-tight text-white">
+                  INTERN HUB
+                </span>
+                <span className="text-[10px] font-mono tracking-wider text-purple-300/70">
+                  Intern Workstation
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Navigation Items */}
+          <div className="px-2.5 py-4 space-y-4">
+            <div>
+              <div className="px-2 text-[10px] font-semibold uppercase tracking-wider text-purple-300/50 mb-1.5">
+                My Workspace
+              </div>
+              <nav className="space-y-1">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setSelectedProjectId(null);
+                        setCurrentTab(item.id);
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-xs font-medium transition-colors ${
+                        isActive
+                          ? 'bg-purple-900/80 text-white font-bold shadow-2xs'
+                          : 'text-purple-200/80 hover:bg-purple-800/40 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon className="w-3.5 h-3.5 opacity-80" />
+                        <span>{item.label}</span>
+                      </div>
+
+                      {item.badge > 0 && (
+                        <span
+                          className={`px-1.5 py-0.2 text-[10px] font-bold rounded-full text-white ${
+                            item.badgeColor || 'bg-purple-950/80 border border-purple-700/50'
+                          }`}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          </div>
+        </div>
+
+        {/* Intern User Footer */}
+        <div className="p-3 border-t border-purple-800/60 bg-purple-950/40">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <img
+                src={currentUser.avatar}
+                alt={currentUser.name}
+                className="w-7 h-7 rounded-md object-cover border border-purple-400/40"
+              />
+              <div className="flex flex-col leading-tight">
+                <span className="text-xs font-semibold text-white">
+                  {currentUser.name}
+                </span>
+                <span className="text-[10px] text-purple-300/70">
+                  Intern • Section C1
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={onLogout}
+              title="Sign Out / Switch Login"
+              className="p-1 rounded text-purple-300 hover:text-white hover:bg-purple-800/40 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* 2. MAIN CONTENT AREA */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <header className="h-14 bg-white px-6 flex items-center justify-between border-b border-slate-200 select-none">
+          {/* Breadcrumbs */}
+          <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
+            <span>Intern Portal</span>
+            <span className="text-slate-300">/</span>
+            <span className="text-slate-900 font-bold">{getBreadcrumbTitle()}</span>
+          </div>
+
+          {/* Right Header Actions */}
+          <div className="flex items-center gap-3">
+            {/* Notifications Trigger */}
+            <button
+              type="button"
+              onClick={() => setIsNotificationsOpen(true)}
+              className="relative p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+              title="Notifications"
+            >
+              <Bell className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span className="w-2 h-2 rounded-full bg-rose-500 absolute top-1.5 right-1.5" />
+              )}
+            </button>
+
+            {/* Logout / Switch Role Button */}
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition-colors"
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5 text-purple-600" />
+              <span>Switch to Manager</span>
+            </button>
+
+            {/* Date Display */}
+            <div className="pl-3 border-l border-slate-200 text-xs font-medium text-slate-500">
+              Thu, 19 Dec 2025
+            </div>
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
+          <div className="max-w-6xl mx-auto space-y-6">
+            {/* Perspective Banner */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-700 to-indigo-700 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold text-sm tracking-wider">
+                  {currentUser.initials || 'AP'}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold">
+                      {currentUser.name} (Intern Perspective)
+                    </h2>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20">
+                      {currentUser.cohort}
+                    </span>
+                  </div>
+                  <p className="text-xs text-purple-100">
+                    Project: {currentUser.primaryProjectName} • Lead: {currentUser.lead.name}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  onClick={onLogout}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white text-purple-700 hover:bg-purple-50 text-xs font-bold transition-all shadow-sm active:scale-95"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Return to Manager Console</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Render Tab View */}
+            {currentTab === 'dashboard' && (
+              <InternDashboardTab
+                workItems={workItems}
+                forms={forms}
+                notifications={notifications}
+                onOpenTaskModal={(t) => setSelectedTask(t)}
+                onOpenFormModal={(f) => setSelectedForm(f)}
+                onOpenMoMModal={() => setCurrentTab('mom')}
+                onOpenNotifications={() => setIsNotificationsOpen(true)}
+                onNavigateTab={(tabId) => {
+                  setSelectedProjectId(null);
+                  setCurrentTab(tabId);
+                }}
+                onSelectProject={(projectId) => {
+                  setSelectedProjectId(projectId);
+                  setCurrentTab('projects');
+                }}
+                onToggleTask={handleToggleTask}
+              />
+            )}
+
+            {currentTab === 'projects' && (
+              selectedProjectId ? (
+                <ScopedProjectView
+                  project={projectsService.getProjectById(selectedProjectId)}
+                  onBack={() => setSelectedProjectId(null)}
+                  onTaskClick={(t) => setSelectedTask(t)}
+                  onToast={onToast}
+                />
+              ) : (
+                <MyProjectsTab
+                  onSelectProject={(projectId) => setSelectedProjectId(projectId)}
+                />
+              )
+            )}
+
+            {currentTab === 'tasks' && (
+              <MyTasksTab
+                workItems={workItems}
+                onOpenTaskModal={(t) => setSelectedTask(t)}
+                onOpenCreatePersonalTask={() => setIsCreatePersonalOpen(true)}
+                onToggleTask={handleToggleTask}
+                onToast={onToast}
+              />
+            )}
+
+            {currentTab === 'forms' && (
+              <AssignedFormsTab
+                forms={forms}
+                onOpenFormModal={(f) => setSelectedForm(f)}
+              />
+            )}
+
+            {currentTab === 'attendance' && (
+              <InternAttendanceTab onToast={onToast} />
+            )}
+
+            {currentTab === 'mom' && (
+              <InternMomTab onToast={onToast} />
+            )}
+
+            {currentTab === 'profile' && (
+              <InternProfileTab onToast={onToast} />
+            )}
+          </div>
+        </main>
+      </div>
+
+      {/* Modals & Drawers */}
+      <WorkItemDetailModal
+        workItem={selectedTask}
+        isOpen={Boolean(selectedTask)}
+        onClose={() => setSelectedTask(null)}
+        onToast={onToast}
+      />
+
+      <DynamicFormModal
+        form={selectedForm}
+        isOpen={Boolean(selectedForm)}
+        onClose={() => setSelectedForm(null)}
+        onSubmitSuccess={() => setForms(formsService.getAssignedForms())}
+        onToast={onToast}
+      />
+
+      <CreatePersonalTaskModal
+        isOpen={isCreatePersonalOpen}
+        onClose={() => setIsCreatePersonalOpen(false)}
+        onTaskCreated={() => setWorkItems(workItemsService.getAllWorkItems())}
+        onToast={onToast}
+      />
+
+      <NotificationsDrawer
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        notifications={notifications}
+        onOpenTarget={(notif) => {
+          setIsNotificationsOpen(false);
+          if (notif.target_type === 'task') {
+            const item = workItemsService.getWorkItemById(notif.target_id);
+            if (item) setSelectedTask(item);
+          } else if (notif.target_type === 'form') {
+            const form = formsService.getFormById(notif.target_id);
+            if (form) setSelectedForm(form);
+          } else if (notif.target_type === 'mom') {
+            setCurrentTab('mom');
+          }
+        }}
+        onToast={onToast}
+      />
+    </div>
+  );
+}
