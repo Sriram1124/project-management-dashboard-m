@@ -1,0 +1,11 @@
+# versions/ — Alembic migration files
+#
+# This directory is intentionally empty in Phase 1.
+# The first migration will be generated in Phase 2 after the domain models
+# (organizations, users, projects, etc.) are implemented from the V1 ERD.
+#
+# To generate the initial migration (Phase 2):
+#   docker compose exec backend alembic revision --autogenerate -m "initial schema"
+#
+# To apply migrations:
+#   docker compose exec backend alembic upgrade head

@@ -31,3 +31,34 @@ dist-ssr/
 *.njsproj
 *.sln
 *.sw?
+
+# ── Python ────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# ── Backend env / secrets ─────────────────────────────────
+# Root .env (Docker Compose variable substitution) — already covered by the
+# .env rule above, listed explicitly for clarity.
+.env
+backend/.env
+
+# ── Docker ────────────────────────────────────────────────
+postgres_data/
