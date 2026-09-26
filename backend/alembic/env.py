@@ -42,9 +42,7 @@ config.set_main_option("sqlalchemy.url", database_url)
 # Phase 2 models inherit from Base; importing them here registers their
 # Table objects in Base.metadata automatically.
 from app.core.database import Base  # noqa: E402
-
-# Import Phase 2 model modules here as they are created, e.g.:
-# from app.models import user, project, work_item  # noqa: F401
+import app.models  # noqa: F401, E402
 
 target_metadata = Base.metadata
 
