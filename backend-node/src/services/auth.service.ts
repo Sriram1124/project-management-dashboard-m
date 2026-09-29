@@ -1,0 +1,160 @@
+import * as argon2 from 'argon2';
+import jwt from 'jsonwebtoken';
+import { prisma } from '../lib/prisma';
+
+const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'access_secret';
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'refresh_secret';
+const ACCESS_EXPIRY = process.env.ACCESS_TOKEN_EXPIRY || '15m';
+
+export class AuthService {
+  static async login(email: string, password: string, userAgent?: string, ipAddress?: string) {
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new Error('Invalid credentials');
+    }
+
+    if (!user.is_active) {
+      throw new Error('User is inactive');
+    }
+
+    const isValid = await argon2.verify(user.password_hash, password);
+    if (!isValid) {
+      throw new Error('Invalid credentials');
+    }
+
+    const primaryRole = user.roles[0]?.role;
+    const permissions = primaryRole?.permissions.map((rp: any) => rp.permission.name) || [];
+
+    const accessToken = jwt.sign(
+      { userId: user.id, role: primaryRole?.name },
+      ACCESS_SECRET,
+      { expiresIn: ACCESS_EXPIRY as any }
+    );
+
+    const refreshToken = jwt.sign(
+      { userId: user.id },
+      REFRESH_SECRET,
+      { expiresIn: '7d' } // using hardcoded 7d for payload
+    );
+    
+    // Hash refresh token for DB
+    const refreshTokenHash = await argon2.hash(refreshToken);
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const session = await prisma.userSession.create({
+      data: {
+        user_id: user.id,
+        refresh_token_hash: refreshTokenHash,
+        expires_at: expiresAt,
+        user_agent: userAgent,
+        ip_address: ipAddress,
+        last_used_at: new Date(),
+      },
+    });
+
+    return {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: primaryRole?.name || 'USER',
+        permissions,
+      },
+      accessToken,
+      refreshToken,
+      sessionId: session.id,
+    };
+  }
+
+  static async refresh(refreshToken: string, sessionId: string) {
+    try {
+      const payload = jwt.verify(refreshToken, REFRESH_SECRET) as any;
+      const session = await prisma.userSession.findUnique({
+        where: { id: sessionId },
+      });
+
+      if (!session || session.revoked_at || session.user_id !== payload.userId) {
+        throw new Error('Invalid session');
+      }
+
+      if (new Date() > session.expires_at) {
+        throw new Error('Session expired');
+      }
+
+      const isValid = await argon2.verify(session.refresh_token_hash, refreshToken);
+      if (!isValid) {
+        throw new Error('Invalid refresh token');
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: session.user_id },
+        include: {
+          roles: { include: { role: true } },
+        },
+      });
+
+      if (!user || !user.is_active) {
+        throw new Error('User inactive or not found');
+      }
+
+      const primaryRole = user.roles[0]?.role;
+
+      const newAccessToken = jwt.sign(
+        { userId: user.id, role: primaryRole?.name },
+        ACCESS_SECRET,
+        { expiresIn: ACCESS_EXPIRY as any }
+      );
+
+      // Rotate refresh token
+      const newRefreshToken = jwt.sign(
+        { userId: user.id },
+        REFRESH_SECRET,
+        { expiresIn: '7d' }
+      );
+      
+      const newRefreshTokenHash = await argon2.hash(newRefreshToken);
+      
+      await prisma.userSession.update({
+        where: { id: sessionId },
+        data: {
+          refresh_token_hash: newRefreshTokenHash,
+          last_used_at: new Date(),
+        },
+      });
+
+      return {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+      };
+
+    } catch (e) {
+      throw new Error('Invalid or expired refresh token');
+    }
+  }
+
+  static async logout(sessionId: string) {
+    await prisma.userSession.update({
+      where: { id: sessionId },
+      data: { revoked_at: new Date() },
+    });
+  }
+}

@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String        @id @default(uuid())
+  organization_id String?
+  name            String
+  email           String        @unique
+  password_hash   String
+  is_active       Boolean       @default(true)
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
+
+  roles           UserRole[]
+  sessions        UserSession[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  created_at  DateTime         @default(now())
+  updated_at  DateTime         @updatedAt
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  created_at  DateTime         @default(now())
+  updated_at  DateTime         @updatedAt
+
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  user_id String
+  role_id String
+
+  user    User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role    Role @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, role_id])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  role_id       String
+  permission_id String
+
+  role       Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, permission_id])
+  @@map("role_permissions")
+}
+
+model UserSession {
+  id                 String    @id @default(uuid())
+  user_id            String
+  refresh_token_hash String
+  expires_at         DateTime
+  created_at         DateTime  @default(now())
+  revoked_at         DateTime?
+  last_used_at       DateTime?
+  user_agent         String?
+  ip_address         String?
+
+  user               User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("user_sessions")
+}

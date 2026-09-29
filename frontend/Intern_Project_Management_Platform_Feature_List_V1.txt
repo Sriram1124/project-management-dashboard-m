@@ -1,0 +1,392 @@
+INTERN PROJECT MANAGEMENT PLATFORM FEATURE LIST — V1
+
+1.  PROJECT OVERVIEW
+
+Purpose: A centralized platform for managing interns, projects, tasks,
+forms, meetings, deadlines, attendance, and progress.
+
+The platform is intended to reduce dependency on scattered communication
+through Microsoft Teams, WhatsApp, and other informal channels by
+providing one central source of truth for project-related work.
+
+Core hierarchy:
+
+Manager ↓ Project ↓ Tech Lead ↓ Section ↓ Intern ↓ Tasks / Subtasks
+
+2.  USER ROLES
+
+2.1 Manager
+
+The Manager is responsible for overall supervision and project-level
+visibility.
+
+Key capabilities: - View all relevant projects. - View all interns and
+tech leads. - View project progress. - View task and subtask progress. -
+View pending and overdue work. - View missed deadlines. - View
+team/meeting attendance. - Identify interns requiring attention. - View
+upcoming deadlines. - View recent project activity. - Send alerts to
+relevant users using Alert All.
+
+2.2 Tech Lead
+
+The Tech Lead is responsible for managing execution within an assigned
+project or section.
+
+Key capabilities: - View assigned projects and sections. - Create
+tasks. - Create subtasks. - Assign subtasks to interns. - Set
+priorities. - Set deadlines. - Update task information. - Monitor intern
+progress. - Review completed work. - Identify pending, overdue, and
+blocked work. - Create and publish forms where authorized. - Monitor
+form submissions. - Create and publish Minutes of Meeting. - Send alerts
+to relevant users using Alert All.
+
+2.3 Intern
+
+The Intern is responsible for completing assigned work and required
+submissions.
+
+Key capabilities: - View assigned projects. - View assigned tasks and
+subtasks. - View task descriptions and requirements. - View deadlines. -
+Update task status. - Submit completed work. - Add comments/progress
+updates. - View pending and overdue work. - Complete assigned forms. -
+View form submission status. - View published Minutes of Meeting. - View
+relevant team information and schedules.
+
+3.  AUTHENTICATION AND USER MANAGEMENT
+
+-   User login and logout.
+-   Role-based access.
+-   Manager, Tech Lead, and Intern roles.
+-   User profile.
+-   Intern-to-section/team assignment.
+-   Tech Lead-to-section/project assignment.
+-   Appropriate access restrictions based on role.
+
+4.  PROJECT MANAGEMENT
+
+Authorized users should be able to:
+
+-   Create projects.
+-   Edit project information.
+-   Set project description.
+-   Set project start date.
+-   Set project deadline/end date.
+-   Assign Tech Leads.
+-   Define project sections.
+-   View project progress.
+-   View project-related tasks.
+-   Track project status.
+-   Archive completed projects.
+
+5.  TASK MANAGEMENT
+
+Tasks should contain:
+
+-   Task title.
+-   Description.
+-   Project.
+-   Section.
+-   Responsible Tech Lead.
+-   Priority.
+-   Status.
+-   Start date.
+-   Due date.
+-   Comments.
+-   Attachments where required.
+-   Creation date.
+-   Last updated date.
+
+Task statuses may include:
+
+-   To Do
+-   In Progress
+-   In Review
+-   Completed
+-   Blocked
+-   Overdue (system-generated based on deadline)
+
+6.  SUBTASK MANAGEMENT
+
+Tech Leads should be able to break larger tasks into smaller subtasks.
+
+Subtasks should support:
+
+-   Subtask title.
+-   Description.
+-   Assignee.
+-   Priority.
+-   Deadline.
+-   Status.
+-   Comments.
+-   Submission/completion information.
+
+The primary workflow is:
+
+Project → Tech Lead → Section → Task → Subtask → Intern
+
+7.  DEADLINE MANAGEMENT
+
+The system should provide centralized deadline tracking.
+
+It should identify:
+
+-   Upcoming deadlines.
+-   Due-today items.
+-   Pending items.
+-   Overdue items.
+-   Completed items.
+-   Blocked items.
+
+Deadlines should be tracked for relevant tasks, subtasks, and forms.
+
+When a deadline passes without completion or submission, the item should
+automatically be identified as overdue.
+
+8.  FORMS
+
+The platform should provide a form feature for collecting structured
+information from interns.
+
+Examples:
+
+-   Weekly progress report.
+-   Daily status report.
+-   Feedback form.
+-   Project requirements form.
+-   Attendance-related form.
+-   Learning/progress report.
+-   Other organization-defined forms.
+
+Authorized users should be able to:
+
+-   Create forms.
+-   Add questions/fields.
+-   Publish forms.
+-   Select the target project, section, team, or users.
+-   Set a publish date.
+-   Set a submission deadline.
+-   View submission status.
+-   Review submitted responses.
+
+Possible form field types:
+
+-   Short text.
+-   Long text.
+-   Number.
+-   Dropdown.
+-   Multiple choice.
+-   Checkboxes.
+-   Date.
+-   File upload.
+-   Yes/No.
+
+9.  FORM SUBMISSION TRACKING
+
+The system should track:
+
+-   Total assigned users.
+-   Submitted forms.
+-   Pending submissions.
+-   Overdue submissions.
+-   Submission date and time.
+
+Example:
+
+Weekly Progress Report
+
+Assigned: 30 Submitted: 24 Pending: 4 Overdue: 2
+
+Managers and authorized Tech Leads should be able to identify users who
+have not submitted required forms.
+
+10. MINUTES OF MEETING (MoM)
+
+The platform should provide a centralized Minutes of Meeting feature.
+
+After a relevant meeting, an authorized user should be able to create
+and publish a MoM.
+
+MoM should contain:
+
+-   Meeting title.
+-   Project.
+-   Section/team.
+-   Date and time.
+-   Meeting organizer.
+-   Participants.
+-   Discussion points.
+-   Decisions.
+-   Meeting notes.
+-   Attachments/references where required.
+
+Published MoMs should be available to relevant participants and
+authorized users.
+
+Historical MoMs should remain accessible for future reference.
+
+V1 NOTE: MoM will be used primarily as a centralized record of meeting
+information. Action-item-to-task conversion is excluded from V1.
+
+11. ATTENDANCE / TEAM PARTICIPATION
+
+The system should provide visibility into required team or meeting
+participation.
+
+The Manager should be able to view:
+
+-   Attendance records.
+-   Missed meetings/sessions.
+-   Team participation.
+-   Interns with repeated missed attendance.
+-   Attendance over a selected period.
+
+Attendance information should be associated with the relevant intern and
+team/section.
+
+12. ALERTS AND NOTIFICATIONS
+
+The platform should provide alerts for important actions and deadlines.
+
+Possible alerts include:
+
+-   Upcoming task deadline.
+-   Overdue task.
+-   Upcoming form deadline.
+-   Pending form.
+-   Overdue form.
+-   Other important project notifications.
+
+Users should receive alerts relevant to their assigned work.
+
+13. ALERT ALL
+
+Managers and authorized Tech Leads should have an “Alert All” function.
+
+When an item or category contains multiple users with pending or overdue
+actions, the authorized user should be able to alert all applicable
+users.
+
+Before sending an alert, the system should display the intended
+recipients.
+
+Example:
+
+Weekly Progress Form
+
+Pending: 8 Overdue: 3
+
+[ ALERT ALL ]
+
+The system should maintain a basic record of sent alerts.
+
+14. MANAGER DASHBOARD
+
+The Manager Dashboard should provide a high-level overview.
+
+Key information:
+
+-   Total interns.
+-   Active projects.
+-   Active Tech Leads.
+-   Active tasks.
+-   Completed tasks.
+-   Pending tasks.
+-   Overdue tasks.
+-   Blocked tasks.
+-   Missed deadlines.
+-   Missed team attendance.
+-   Pending/overdue forms.
+-   Project progress.
+-   Upcoming deadlines.
+-   Interns requiring attention.
+-   Recent activity.
+
+The Manager should be able to drill down from:
+
+Manager → Project → Tech Lead → Section → Intern → Work
+
+15. INTERN DASHBOARD
+
+The Intern Dashboard should focus on personal execution.
+
+Key information:
+
+-   My tasks.
+-   My subtasks.
+-   My projects.
+-   Tasks due today.
+-   Upcoming deadlines.
+-   Overdue work.
+-   Completed work.
+-   Current progress.
+-   Pending forms.
+-   Overdue forms.
+-   Form submission status.
+-   Published Minutes of Meeting.
+-   Relevant team updates.
+
+16. ACTIVITY HISTORY
+
+The platform should maintain a history of important project activities.
+
+Examples:
+
+-   Project created.
+-   Tech Lead assigned.
+-   Task created.
+-   Subtask assigned.
+-   Deadline changed.
+-   Task status changed.
+-   Form published.
+-   Form submitted.
+-   MoM published.
+-   Alert sent.
+
+This provides a central record of project activity instead of relying on
+external chat history.
+
+17. SEARCH AND FILTERING
+
+Users should be able to search and filter relevant information.
+
+Potential filters:
+
+-   Project.
+-   Section.
+-   Tech Lead.
+-   Intern.
+-   Task status.
+-   Priority.
+-   Deadline.
+-   Overdue status.
+-   Form status.
+-   Date range.
+
+18. V1 PRODUCT PRINCIPLE
+
+The platform should answer three questions quickly:
+
+For the Manager: “What is happening across the projects, who is falling
+behind, and where does attention need to be given?”
+
+For the Tech Lead: “What work needs to be assigned, monitored, reviewed,
+or escalated?”
+
+For the Intern: “What do I need to complete, submit, or attend, and by
+when?”
+
+19. V1 SCOPE EXCLUSIONS
+
+The following are intentionally excluded from the initial version:
+
+-   Automatic conversion of MoM action items into tasks.
+-   Complex performance scoring.
+-   Advanced HR management.
+-   Payroll management.
+-   Full Jira-level issue management.
+-   Complex workflow customization.
+-   Advanced analytics beyond basic project, task, deadline, form, and
+    attendance visibility.
+
+These can be considered for future versions after the core platform is
+stable.
