@@ -3,13 +3,20 @@ import { Search, Bell, Mail, ArrowLeft } from 'lucide-react';
 
 export default function Header({ 
   breadcrumbs = ['Console', 'Manager Dashboard'], 
-  title = 'Welcome Back, Sarah',
+  title = 'Manager Dashboard',
   onOpenSearch,
   onOpenAlertModal,
-  unreadAlertCount = 4,
+  unreadAlertCount = 0,
   onBreadcrumbClick,
   onBackClick,
 }) {
+  const formattedDate = new Date().toLocaleDateString('en-US', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
+
   return (
     <header className="h-14 bg-white px-6 flex items-center justify-between border-b border-slate-200 select-none">
       {/* Left: Breadcrumbs & Context Title */}
@@ -85,7 +92,7 @@ export default function Header({
 
         {/* Date Display */}
         <div className="pl-3 border-l border-slate-200 text-xs font-medium text-slate-500 whitespace-nowrap">
-          Thu, 19 Dec 2025
+          {formattedDate}
         </div>
       </div>
     </header>

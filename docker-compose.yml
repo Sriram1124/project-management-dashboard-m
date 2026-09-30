@@ -46,11 +46,14 @@ services:
     volumes:
       - ./backend-node:/app
       - /app/node_modules
+      - project_storage:/app/storage
     command: npx tsx src/server.ts
 
 # ── Named volumes ────────────────────────────────────────────────────────────
 volumes:
   postgres_data:
+    driver: local
+  project_storage:
     driver: local
 
 # ── Networks ─────────────────────────────────────────────────────────────────

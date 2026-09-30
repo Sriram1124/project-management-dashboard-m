@@ -67,7 +67,12 @@ export default function ProjectHealth({ projects, onViewAll }) {
 
       {/* Projects List */}
       <div className="mt-5 space-y-4">
-        {projects.map((proj) => (
+        {(!projects || projects.length === 0) ? (
+          <div className="p-8 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 text-slate-400 text-xs">
+            No projects available yet. Create a project in the Projects Directory.
+          </div>
+        ) : (
+          projects.map((proj) => (
           <div
             key={proj.id}
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl hover:bg-slate-50/80 border border-transparent hover:border-slate-200/70 transition-all"
@@ -109,7 +114,7 @@ export default function ProjectHealth({ projects, onViewAll }) {
               </div>
             </div>
           </div>
-        ))}
+        )))}
       </div>
     </div>
   );

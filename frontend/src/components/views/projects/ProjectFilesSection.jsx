@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { projectsService } from '../../../services/projects.service';
 import { 
   Folder, 
   Plus, 
@@ -13,104 +14,112 @@ import {
   Clock, 
   Check, 
   X,
-  UploadCloud
+  UploadCloud,
+  Loader2,
+  FileQuestion
 } from 'lucide-react';
 import FilePreviewModal from './FilePreviewModal';
 
-// Clean inline SVG Architecture Diagram for the image preview thumbnail
-const architectureSvgDataUri = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 340" width="100%" height="100%">
-  <rect width="600" height="340" fill="%23f8fafc" rx="8"/>
-  <rect x="20" y="20" width="560" height="300" fill="white" stroke="%23e2e8f0" stroke-width="1.5" rx="6"/>
-  <!-- Header -->
-  <rect x="20" y="20" width="560" height="40" fill="%23f1f5f9" rx="6"/>
-  <circle cx="45" cy="40" r="5" fill="%23ef4444"/>
-  <circle cx="62" cy="40" r="5" fill="%23f59e0b"/>
-  <circle cx="79" cy="40" r="5" fill="%2310b981"/>
-  <text x="105" y="44" font-family="sans-serif" font-size="12" font-weight="bold" fill="%23475569">System Architecture • Microservices &amp; PostgreSQL Engine</text>
-  <!-- Client Box -->
-  <rect x="50" y="100" width="120" height="70" rx="8" fill="%23e0e7ff" stroke="%236366f1" stroke-width="1.5"/>
-  <text x="110" y="132" font-family="sans-serif" font-size="12" font-weight="bold" fill="%234338ca" text-anchor="middle">React Client</text>
-  <text x="110" y="150" font-family="sans-serif" font-size="9" fill="%236366f1" text-anchor="middle">Vite + Tailwind</text>
-  <!-- Gateway Box -->
-  <rect x="240" y="100" width="130" height="70" rx="8" fill="%23f3e8ff" stroke="%239333ea" stroke-width="1.5"/>
-  <text x="305" y="132" font-family="sans-serif" font-size="12" font-weight="bold" fill="%237e22ce" text-anchor="middle">API Gateway</text>
-  <text x="305" y="150" font-family="sans-serif" font-size="9" fill="%239333ea" text-anchor="middle">JWT Auth &amp; Rate Limit</text>
-  <!-- Database Box -->
-  <rect x="440" y="100" width="120" height="70" rx="8" fill="%23dcfce7" stroke="%2316a34a" stroke-width="1.5"/>
-  <text x="500" y="132" font-family="sans-serif" font-size="12" font-weight="bold" fill="%2315803d" text-anchor="middle">PostgreSQL</text>
-  <text x="500" y="150" font-family="sans-serif" font-size="9" fill="%2316a34a" text-anchor="middle">Primary DB + Pool</text>
-  <!-- Connectors -->
-  <line x1="170" y1="135" x2="240" y2="135" stroke="%2394a3b8" stroke-width="2" stroke-dasharray="4"/>
-  <polygon points="238,131 246,135 238,139" fill="%2364748b"/>
-  <line x1="370" y1="135" x2="440" y2="135" stroke="%2394a3b8" stroke-width="2" stroke-dasharray="4"/>
-  <polygon points="438,131 446,135 438,139" fill="%2364748b"/>
-  <!-- Sub services -->
-  <rect x="190" y="215" width="105" height="55" rx="6" fill="%23fef3c7" stroke="%23d97706" stroke-width="1.5"/>
-  <text x="242" y="243" font-family="sans-serif" font-size="10" font-weight="bold" fill="%23b45309" text-anchor="middle">Auth Service</text>
-  <text x="242" y="257" font-family="sans-serif" font-size="8" fill="%23d97706" text-anchor="middle">HttpOnly Cookies</text>
-  <rect x="320" y="215" width="115" height="55" rx="6" fill="%23e0f2fe" stroke="%230284c7" stroke-width="1.5"/>
-  <text x="377" y="243" font-family="sans-serif" font-size="10" font-weight="bold" fill="%230369a1" text-anchor="middle">Timesheets Engine</text>
-  <text x="377" y="257" font-family="sans-serif" font-size="8" fill="%230284c7" text-anchor="middle">Weekly Sync Job</text>
-  <line x1="242" y1="170" x2="242" y2="215" stroke="%2394a3b8" stroke-width="1.5"/>
-  <line x1="377" y1="170" x2="377" y2="215" stroke="%2394a3b8" stroke-width="1.5"/>
-</svg>`;
+// Component to dynamically load and display authentic image thumbnails
+function ImageThumbnail({ projectId, fileId, alt }) {
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-const INITIAL_FILES = [
-  {
-    id: 'f-1',
-    name: 'Project Requirements.pdf',
-    type: 'pdf',
-    size: '2.4 MB',
-    uploadedAt: 'Sep 18, 2026',
-    uploadedBy: 'Priya Sharma',
-    isImage: false,
-  },
-  {
-    id: 'f-2',
-    name: 'Database Schema.xlsx',
-    type: 'xlsx',
-    size: '1.1 MB',
-    uploadedAt: 'Sep 20, 2026',
-    uploadedBy: 'Priya Sharma',
-    isImage: false,
-  },
-  {
-    id: 'f-3',
-    name: 'Meeting Minutes — Sprint 3.pdf',
-    type: 'pdf',
-    size: '840 KB',
-    uploadedAt: 'Yesterday, 4:15 PM',
-    uploadedBy: 'Priya Sharma',
-    isImage: false,
-  },
-  {
-    id: 'f-4',
-    name: 'Project Documentation.docx',
-    type: 'docx',
-    size: '3.8 MB',
-    uploadedAt: 'Today, 11:20 AM',
-    uploadedBy: 'Priya Sharma',
-    isImage: false,
-  },
-  {
-    id: 'f-5',
-    name: 'System Architecture Diagram.png',
-    type: 'png',
-    size: '1.8 MB',
-    uploadedAt: 'Sep 21, 2026',
-    uploadedBy: 'Priya Sharma',
-    isImage: true,
-    thumbnailUrl: architectureSvgDataUri,
-  },
-];
+  useEffect(() => {
+    let active = true;
+    let createdUrl = null;
 
-export default function ProjectFilesSection({ onToast }) {
-  const [files, setFiles] = useState(INITIAL_FILES);
+    projectsService.getDocumentBlobUrl(projectId, fileId)
+      .then((url) => {
+        if (active) {
+          createdUrl = url;
+          setBlobUrl(url);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load thumbnail:', err);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
+  }, [projectId, fileId]);
+
+  if (loading) {
+    return (
+      <div className="w-full h-28 bg-purple-50 flex items-center justify-center text-purple-400">
+        <Loader2 className="w-5 h-5 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!blobUrl) {
+    return (
+      <div className="w-full h-28 bg-slate-100 flex items-center justify-center text-slate-400">
+        <ImageIcon className="w-8 h-8 opacity-50" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-28 bg-slate-50 flex items-center justify-center overflow-hidden border-b border-slate-100">
+      <img
+        src={blobUrl}
+        alt={alt}
+        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+      />
+    </div>
+  );
+}
+
+export default function ProjectFilesSection({ projectId, onToast }) {
+  const [files, setFiles] = useState([]);
   const [previewFile, setPreviewFile] = useState(null);
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [renameFile, setRenameFile] = useState(null);
   const [newName, setNewName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
+
+  const formatDoc = (d) => {
+    const ext = d.document_type || (d.name ? d.name.split('.').pop().toLowerCase() : 'pdf');
+    const isImg = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext);
+    return {
+      id: d.id,
+      name: d.name,
+      type: ext,
+      size: d.storage_key ? d.storage_key.split('/').pop() : 'Document',
+      uploadedAt: d.created_at ? new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently',
+      isImage: isImg,
+    };
+  };
+
+  const loadDocuments = () => {
+    if (projectId) {
+      setLoading(true);
+      projectsService.getDocuments(projectId)
+        .then((docs) => {
+          if (docs && docs.length > 0) {
+            setFiles(docs.map(formatDoc));
+          } else {
+            setFiles([]);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load documents:', err);
+        })
+        .finally(() => setLoading(false));
+    }
+  };
+
+  useEffect(() => {
+    loadDocuments();
+  }, [projectId]);
 
   // Close open dropdowns when clicking outside
   const handleContainerClick = () => {
@@ -122,33 +131,23 @@ export default function ProjectFilesSection({ onToast }) {
     fileInputRef.current?.click();
   };
 
-  const handleFileInputChange = (e) => {
+  const handleFileInputChange = async (e) => {
     const uploaded = Array.from(e.target.files || []);
-    if (!uploaded.length) return;
+    if (!uploaded.length || !projectId) return;
 
-    const newEntries = uploaded.map((f, idx) => {
-      const ext = f.name.split('.').pop().toLowerCase();
-      const isImg = ['png', 'jpg', 'jpeg', 'webp', 'svg'].includes(ext);
-      const sizeStr = f.size > 1024 * 1024 
-        ? `${(f.size / (1024 * 1024)).toFixed(1)} MB`
-        : `${Math.round(f.size / 1024)} KB`;
-
-      return {
-        id: `f-${Date.now()}-${idx}`,
-        name: f.name,
-        type: ext,
-        size: sizeStr,
-        uploadedAt: 'Just now',
-        uploadedBy: 'Priya Sharma',
-        isImage: isImg,
-        thumbnailUrl: isImg ? URL.createObjectURL(f) : null,
-      };
-    });
-
-    setFiles((prev) => [...newEntries, ...prev]);
-    onToast?.(`Uploaded ${newEntries.length} file(s) successfully`);
-    // Reset file input
-    e.target.value = '';
+    setUploading(true);
+    try {
+      for (const f of uploaded) {
+        await projectsService.uploadDocument(projectId, f);
+      }
+      onToast?.(`Uploaded ${uploaded.length} file(s) successfully`);
+      loadDocuments();
+    } catch (err) {
+      onToast?.(err?.message || 'Failed to upload document');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
   };
 
   const handlePreview = (file, e) => {
@@ -157,17 +156,16 @@ export default function ProjectFilesSection({ onToast }) {
     setPreviewFile(file);
   };
 
-  const handleDownload = (file, e) => {
+  const handleDownload = async (file, e) => {
     e?.stopPropagation();
     setActiveMenuId(null);
-    onToast?.(`Downloading ${file.name}...`);
-    // Create mock download link
-    const link = document.createElement('a');
-    link.href = file.thumbnailUrl || '#';
-    link.download = file.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (!projectId) return;
+    try {
+      onToast?.(`Downloading ${file.name}...`);
+      await projectsService.downloadDocument(projectId, file.id, file.name);
+    } catch (err) {
+      onToast?.(err?.message || 'Failed to download document');
+    }
   };
 
   const handleStartRename = (file, e) => {
@@ -177,26 +175,62 @@ export default function ProjectFilesSection({ onToast }) {
     setNewName(file.name);
   };
 
-  const handleConfirmRename = () => {
-    if (!newName.trim() || !renameFile) return;
-    setFiles((prev) =>
-      prev.map((f) => (f.id === renameFile.id ? { ...f, name: newName.trim() } : f))
-    );
-    onToast?.(`Renamed to "${newName.trim()}"`);
-    setRenameFile(null);
-    setNewName('');
+  const handleConfirmRename = async () => {
+    if (!newName.trim() || !renameFile || !projectId) return;
+    const trimmed = newName.trim();
+    try {
+      await projectsService.updateDocument(projectId, renameFile.id, { name: trimmed });
+      setFiles((prev) =>
+        prev.map((f) => (f.id === renameFile.id ? { ...f, name: trimmed } : f))
+      );
+      onToast?.(`Renamed to "${trimmed}"`);
+    } catch (err) {
+      onToast?.(err?.message || 'Failed to rename document');
+    } finally {
+      setRenameFile(null);
+      setNewName('');
+    }
   };
 
-  const handleDelete = (file, e) => {
+  const handleDelete = async (file, e) => {
     e?.stopPropagation();
     setActiveMenuId(null);
-    setFiles((prev) => prev.filter((f) => f.id !== file.id));
-    onToast?.(`Deleted "${file.name}"`);
+    if (!projectId) return;
+    try {
+      await projectsService.deleteDocument(projectId, file.id);
+      setFiles((prev) => prev.filter((f) => f.id !== file.id));
+      onToast?.(`Deleted "${file.name}"`);
+    } catch (err) {
+      onToast?.(err?.message || 'Failed to delete document');
+    }
   };
 
   const toggleMenu = (fileId, e) => {
     e.stopPropagation();
     setActiveMenuId((prev) => (prev === fileId ? null : fileId));
+  };
+
+  const getFileBadgeColor = (type) => {
+    switch (type.toLowerCase()) {
+      case 'pdf':
+        return 'bg-rose-50 text-rose-600 border-rose-200';
+      case 'xlsx':
+      case 'xls':
+      case 'csv':
+        return 'bg-emerald-50 text-emerald-600 border-emerald-200';
+      case 'docx':
+      case 'doc':
+        return 'bg-blue-50 text-blue-600 border-blue-200';
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+      case 'webp':
+      case 'gif':
+      case 'svg':
+        return 'bg-purple-50 text-purple-600 border-purple-200';
+      default:
+        return 'bg-slate-100 text-slate-600 border-slate-200';
+    }
   };
 
   return (
@@ -223,174 +257,169 @@ export default function ProjectFilesSection({ onToast }) {
             className="hidden"
           />
           <button
+            type="button"
             onClick={handleUploadClick}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+            disabled={uploading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Upload File</span>
+            {uploading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <UploadCloud className="w-3.5 h-3.5" />
+            )}
+            <span>{uploading ? 'Uploading...' : 'Upload File'}</span>
           </button>
         </div>
       </div>
 
-      {/* Visual File Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5">
-        {files.map((file) => {
-          const isMenuOpen = activeMenuId === file.id;
-
-          return (
+      {/* Files Grid / Empty State */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center p-8 bg-slate-50/50 rounded-xl border border-slate-100 text-slate-400">
+          <Loader2 className="w-6 h-6 text-purple-600 animate-spin mb-2" />
+          <span className="text-xs font-medium">Loading project files...</span>
+        </div>
+      ) : files.length === 0 ? (
+        <div className="flex flex-col items-center justify-center p-8 bg-slate-50/40 rounded-xl border border-dashed border-slate-200 text-center">
+          <FileQuestion className="w-8 h-8 text-slate-300 mb-2" />
+          <h4 className="text-xs font-bold text-slate-700">No project documents yet</h4>
+          <p className="text-[11px] text-slate-400 max-w-sm mt-0.5 mb-3">
+            Upload requirements, specifications, and architecture diagrams for your team members.
+          </p>
+          <button
+            type="button"
+            onClick={handleUploadClick}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors cursor-pointer"
+          >
+            <UploadCloud className="w-3.5 h-3.5" />
+            <span>Upload First File</span>
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          {files.map((file) => (
             <div
               key={file.id}
               onClick={(e) => handlePreview(file, e)}
-              className="bg-white hover:bg-slate-50/80 border border-slate-200/80 hover:border-purple-300 rounded-xl p-3.5 transition-all shadow-xs hover:shadow-sm cursor-pointer group flex flex-col justify-between relative"
+              className="group bg-white rounded-xl border border-slate-200 hover:border-purple-300 hover:shadow-xs transition-all overflow-hidden flex flex-col justify-between cursor-pointer relative"
             >
-              {/* Top Row: Icon / Thumbnail + Three-dot Menu */}
-              <div>
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  {/* File Type Representation */}
-                  {file.isImage ? (
-                    <div className="w-full h-24 rounded-lg overflow-hidden bg-slate-100 border border-slate-200/70 relative mb-1 group-hover:border-purple-200 transition-colors">
-                      <img
-                        src={file.thumbnailUrl}
-                        alt={file.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                      />
-                      <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-900/70 text-white backdrop-blur-xs">
-                        {file.type}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/70 group-hover:bg-purple-50 group-hover:border-purple-200 transition-colors">
-                        {file.type === 'pdf' && <FileText className="w-4 h-4 text-rose-600" />}
-                        {file.type === 'xlsx' && <FileSpreadsheet className="w-4 h-4 text-emerald-600" />}
-                        {file.type === 'docx' && <FileText className="w-4 h-4 text-blue-600" />}
-                        {!['pdf', 'xlsx', 'docx'].includes(file.type) && (
-                          <FileText className="w-4 h-4 text-purple-600" />
-                        )}
-                      </div>
-                      <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200/60">
-                        {file.type}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Three-dot Action Menu Button */}
-                  <div className="relative shrink-0">
-                    <button
-                      onClick={(e) => toggleMenu(file.id, e)}
-                      className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-                      title="File options"
-                    >
-                      <MoreVertical className="w-3.5 h-3.5" />
-                    </button>
-
-                    {/* Dropdown Menu */}
-                    {isMenuOpen && (
-                      <div 
-                        className="absolute right-0 top-6 z-20 w-36 bg-white rounded-lg shadow-lg border border-slate-200 py-1 text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-100"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          onClick={(e) => handlePreview(file, e)}
-                          className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-slate-50 text-slate-700 font-medium"
-                        >
-                          <Eye className="w-3.5 h-3.5 text-slate-400" />
-                          <span>Preview</span>
-                        </button>
-                        <button
-                          onClick={(e) => handleDownload(file, e)}
-                          className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-slate-50 text-slate-700 font-medium"
-                        >
-                          <Download className="w-3.5 h-3.5 text-slate-400" />
-                          <span>Download</span>
-                        </button>
-                        <button
-                          onClick={(e) => handleStartRename(file, e)}
-                          className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-slate-50 text-slate-700 font-medium"
-                        >
-                          <Pencil className="w-3.5 h-3.5 text-slate-400" />
-                          <span>Rename</span>
-                        </button>
-                        <div className="h-px bg-slate-100 my-1" />
-                        <button
-                          onClick={(e) => handleDelete(file, e)}
-                          className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-rose-50 text-rose-600 font-medium"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                          <span>Delete</span>
-                        </button>
-                      </div>
+              {/* Card Top: Image Thumbnail OR File Icon Header */}
+              {file.isImage ? (
+                <ImageThumbnail projectId={projectId} fileId={file.id} alt={file.name} />
+              ) : (
+                <div className="p-3.5 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between">
+                  <div className="p-2 rounded-lg bg-white border border-slate-200 shadow-2xs">
+                    {file.type === 'pdf' && <FileText className="w-5 h-5 text-rose-600" />}
+                    {['xlsx', 'xls', 'csv'].includes(file.type) && <FileSpreadsheet className="w-5 h-5 text-emerald-600" />}
+                    {['docx', 'doc'].includes(file.type) && <FileText className="w-5 h-5 text-blue-600" />}
+                    {!['pdf', 'xlsx', 'xls', 'csv', 'docx', 'doc'].includes(file.type) && (
+                      <FileText className="w-5 h-5 text-slate-500" />
                     )}
                   </div>
+                  <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${getFileBadgeColor(file.type)}`}>
+                    {file.type}
+                  </span>
                 </div>
+              )}
 
-                {/* File Name */}
-                <h4 
-                  className="text-xs font-bold text-slate-800 truncate group-hover:text-purple-700 transition-colors"
-                  title={file.name}
+              {/* Card Info */}
+              <div className="p-3 space-y-1">
+                {renameFile?.id === file.id ? (
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="text"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleConfirmRename();
+                        if (e.key === 'Escape') setRenameFile(null);
+                      }}
+                      className="flex-1 px-1.5 py-0.5 text-xs border border-purple-400 rounded focus:outline-hidden"
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleConfirmRename}
+                      className="p-1 rounded hover:bg-emerald-50 text-emerald-600"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setRenameFile(null)}
+                      className="p-1 rounded hover:bg-rose-50 text-rose-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <h4 className="text-xs font-bold text-slate-800 truncate" title={file.name}>
+                    {file.name}
+                  </h4>
+                )}
+
+                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1">
+                  <span>{file.uploadedAt}</span>
+                  <span className="font-mono uppercase">{file.type}</span>
+                </div>
+              </div>
+
+              {/* Action Dropdown Menu Trigger */}
+              <div className="absolute top-2 right-2" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={(e) => toggleMenu(file.id, e)}
+                  className="p-1 rounded-md bg-white/80 hover:bg-white text-slate-500 hover:text-slate-800 shadow-2xs border border-slate-200 transition-colors"
                 >
-                  {file.name}
-                </h4>
-              </div>
+                  <MoreVertical className="w-3.5 h-3.5" />
+                </button>
 
-              {/* Bottom Metadata: Size & Modified Date */}
-              <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2.5 pt-2 border-t border-slate-100">
-                <span className="font-medium text-slate-500">{file.size}</span>
-                <span className="truncate ml-2 text-right" title={`Uploaded ${file.uploadedAt}`}>
-                  {file.uploadedAt}
-                </span>
+                {/* Dropdown Popover */}
+                {activeMenuId === file.id && (
+                  <div className="absolute right-0 mt-1 w-32 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20 animate-in fade-in zoom-in-95">
+                    <button
+                      onClick={(e) => handlePreview(file, e)}
+                      className="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Preview</span>
+                    </button>
+                    <button
+                      onClick={(e) => handleDownload(file, e)}
+                      className="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                    >
+                      <Download className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Download</span>
+                    </button>
+                    <button
+                      onClick={(e) => handleStartRename(file, e)}
+                      className="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Rename</span>
+                    </button>
+                    <div className="border-t border-slate-100 my-0.5" />
+                    <button
+                      onClick={(e) => handleDelete(file, e)}
+                      className="w-full px-3 py-1.5 text-left text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
-          );
-        })}
-      </div>
-
-      {/* Rename Dialog Modal */}
-      {renameFile && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-100"
-          onClick={() => setRenameFile(null)}
-        >
-          <div 
-            className="bg-white rounded-xl shadow-xl border border-slate-200 p-5 w-full max-w-sm"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h4 className="text-sm font-bold text-slate-900 mb-2">Rename File</h4>
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleConfirmRename()}
-              autoFocus
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-hidden focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
-            />
-            <div className="flex items-center justify-end gap-2 mt-4">
-              <button
-                onClick={() => setRenameFile(null)}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmRename}
-                className="px-3 py-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
-              >
-                Save
-              </button>
-            </div>
-          </div>
+          ))}
         </div>
       )}
 
-      {/* File Preview Modal */}
+      {/* Preview Modal */}
       {previewFile && (
         <FilePreviewModal
           file={previewFile}
+          projectId={projectId}
           onClose={() => setPreviewFile(null)}
-          onDownload={handleDownload}
+          onDownload={(f) => handleDownload(f)}
         />
       )}
     </div>
   );
 }
-

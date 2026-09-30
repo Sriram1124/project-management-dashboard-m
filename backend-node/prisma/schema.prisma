@@ -7,6 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Organization {
+  id         String    @id @default(uuid())
+  name       String
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  users      User[]
+  projects   Project[]
+
+  @@map("organizations")
+}
+
 model User {
   id              String        @id @default(uuid())
   organization_id String?
@@ -17,8 +29,11 @@ model User {
   created_at      DateTime      @default(now())
   updated_at      DateTime      @updatedAt
 
-  roles           UserRole[]
-  sessions        UserSession[]
+  organization        Organization?   @relation(fields: [organization_id], references: [id])
+  roles               UserRole[]
+  sessions            UserSession[]
+  owned_projects      Project[]       @relation("ProjectOwner")
+  project_memberships ProjectMember[]
 
   @@map("users")
 }
@@ -85,4 +100,56 @@ model UserSession {
 
   @@index([user_id])
   @@map("user_sessions")
+}
+
+enum ProjectStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+model Project {
+  id              String            @id @default(uuid())
+  organization_id String
+  owner_id        String
+  name            String
+  description     String?
+  start_date      DateTime?
+  end_date        DateTime?
+  status          ProjectStatus     @default(PLANNED)
+  created_at      DateTime          @default(now())
+  updated_at      DateTime          @updatedAt
+
+  organization    Organization      @relation(fields: [organization_id], references: [id])
+  owner           User              @relation("ProjectOwner", fields: [owner_id], references: [id])
+  members         ProjectMember[]
+  documents       ProjectDocument[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  project_id String
+  user_id    String
+
+  project    Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  user       User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([project_id, user_id])
+  @@map("project_members")
+}
+
+model ProjectDocument {
+  id            String   @id @default(uuid())
+  project_id    String
+  name          String
+  document_type String
+  storage_key   String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  project       Project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@map("project_documents")
 }

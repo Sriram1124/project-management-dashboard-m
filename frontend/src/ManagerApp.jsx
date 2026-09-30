@@ -13,22 +13,21 @@ import AlertModal from './components/modals/AlertModal';
 import QuickSearchModal from './components/modals/QuickSearchModal';
 import ExceptionDetailModal from './components/modals/ExceptionDetailModal';
 import TeamsChannelView from './components/channels/TeamsChannelView';
-import { initialChannelForms } from './data/channelFormsData';
 import { CheckCircle2 } from 'lucide-react';
-import { mockProjectWorkspaceData } from './data/projectWorkspaceData';
 import { useAuth } from './context/AuthContext';
 
 export default function ManagerApp() {
-  const { logout } = useAuth();
+  const { user: authUser, logout } = useAuth();
   const [currentRole, setCurrentRole] = useState('manager'); // 'manager' | 'intern'
   const [currentView, setCurrentView] = useState('dashboard');
   const [activeProjectId, setActiveProjectId] = useState(null);
+  const [activeProjectName, setActiveProjectName] = useState(null);
   const [activeProjectTab, setActiveProjectTab] = useState('overview');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
   const [selectedException, setSelectedException] = useState(null);
   const [toast, setToast] = useState(null);
-  const [channelForms, setChannelForms] = useState(initialChannelForms);
+  const [channelForms, setChannelForms] = useState([]);
 
   const handlePostChannelForm = (newForm) => {
     setChannelForms((prev) => [newForm, ...prev]);
@@ -114,17 +113,18 @@ export default function ManagerApp() {
     triggerToast(`Action initiated: ${actionName}`);
   };
 
-  const handleSelectProject = (projectId) => {
-    const id = projectId || 'PROJ-SMS-2025';
-    setActiveProjectId(id);
-    setActiveProjectTab('kanban');
+  const handleSelectProject = (projectId, projectName) => {
+    setActiveProjectId(projectId);
+    setActiveProjectName(projectName || null);
+    setActiveProjectTab('overview');
     setCurrentView('projects');
-    window.history.pushState({ view: 'projects', projectId: id }, '', window.location.pathname);
-    triggerToast('Loaded Kanban Board: Student Management System');
+    window.history.pushState({ view: 'projects', projectId: projectId }, '', window.location.pathname);
+    triggerToast(projectName ? `Loaded Project: ${projectName}` : 'Loaded Project Workspace');
   };
 
   const handleExitProject = () => {
     setActiveProjectId(null);
+    setActiveProjectName(null);
     setCurrentView('projects');
     window.history.pushState({ view: 'projects', projectId: null }, '', window.location.pathname);
   };
@@ -142,11 +142,11 @@ export default function ManagerApp() {
   const getViewTitle = () => {
     if (currentRole === 'intern') return 'Intern Workstation';
     if (activeProjectId) {
-      return mockProjectWorkspaceData.name;
+      return activeProjectName || 'Project Workspace';
     }
     switch (currentView) {
       case 'dashboard':
-        return 'Welcome Back, Sarah';
+        return `Welcome Back, ${authUser?.name || 'Manager'}`;
       case 'projects':
         return 'Projects Directory';
       case 'interns':
@@ -167,7 +167,7 @@ export default function ManagerApp() {
   const getBreadcrumbs = () => {
     if (currentRole === 'intern') return ['Intern Portal', 'My Workspace'];
     if (activeProjectId) {
-      return ['Projects', mockProjectWorkspaceData.name];
+      return ['Projects', activeProjectName || 'Project Workspace'];
     }
     const pageLabel =
       {
@@ -197,10 +197,11 @@ export default function ManagerApp() {
         onExitProject={handleExitProject}
         activeProjectTab={activeProjectTab}
         onSelectProjectTab={(tabId) => setActiveProjectTab(tabId)}
-        internCount={48}
+        internCount={0}
         currentRole={currentRole}
         onTogglePerspective={handleTogglePerspective}
         onLogout={logout}
+        user={authUser}
       />
 
       {/* Main Content Area */}
@@ -211,7 +212,7 @@ export default function ManagerApp() {
           title={getViewTitle()}
           onOpenSearch={() => setIsSearchOpen(true)}
           onOpenAlertModal={() => setIsAlertModalOpen(true)}
-          unreadAlertCount={4}
+          unreadAlertCount={0}
           onBackClick={activeProjectId ? handleExitProject : null}
           onBreadcrumbClick={(crumb) => {
             if (crumb === 'Projects') {
@@ -229,12 +230,16 @@ export default function ManagerApp() {
             <InternPortalView onSwitchToManager={() => setCurrentRole('manager')} />
           ) : activeProjectId ? (
             <ProjectWorkspaceView
+              projectId={activeProjectId}
               onBackToDirectory={handleExitProject}
               activeTab={activeProjectTab}
               onTabChange={(tabId) => setActiveProjectTab(tabId)}
               onOpenSearch={() => setIsSearchOpen(true)}
               onActionTrigger={(action) => triggerToast(`Action opened: ${action}`)}
               onToast={triggerToast}
+              onProjectLoaded={(proj) => {
+                if (proj?.name) setActiveProjectName(proj.name);
+              }}
             />
           ) : (
             <>

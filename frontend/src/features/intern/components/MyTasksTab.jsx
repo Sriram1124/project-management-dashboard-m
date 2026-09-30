@@ -198,20 +198,35 @@ export default function MyTasksTab({
         </div>
       </div>
 
-      {/* VIEW 1: BOARD (Personal Kanban) */}
-      {viewMode === 'board' && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-500 pb-1">
-            <span>Personal Kanban Board (Showing your {filteredItems.length} active tickets)</span>
-            <span>Drag cards between columns to update status</span>
+      {workItems.length === 0 ? (
+        <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 text-slate-400">
+          <CheckSquare className="w-10 h-10 mx-auto mb-3 text-purple-400" />
+          <h4 className="font-bold text-slate-800 text-base">No Tasks Available</h4>
+          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
+            Task tracking, personal kanban boards, and work item hierarchy are planned for the V2 Work Management module.
+          </p>
+          <div className="mt-4">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+              Planned for V2
+            </span>
           </div>
-          <PersonalKanbanBoard
-            workItems={filteredItems}
-            onTaskClick={onOpenTaskModal}
-            onToast={onToast}
-          />
         </div>
-      )}
+      ) : (
+        <>
+          {/* VIEW 1: BOARD (Personal Kanban) */}
+          {viewMode === 'board' && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-500 pb-1">
+                <span>Personal Kanban Board (Showing your {filteredItems.length} active tickets)</span>
+                <span>Drag cards between columns to update status</span>
+              </div>
+              <PersonalKanbanBoard
+                workItems={filteredItems}
+                onTaskClick={onOpenTaskModal}
+                onToast={onToast}
+              />
+            </div>
+          )}
 
       {/* VIEW 2: HIERARCHY TREE */}
       {viewMode === 'hierarchy' && (
@@ -362,6 +377,8 @@ export default function MyTasksTab({
             })}
           </div>
         )
+      )}
+        </>
       )}
     </div>
   );

@@ -48,7 +48,14 @@ export default function RecentActivity({ activities, onViewAll }) {
 
       {/* Activity Timeline list */}
       <div className="space-y-3.5">
-        {activities.map((act) => (
+        {(!activities || activities.length === 0) ? (
+          <div className="py-8 text-center text-slate-400 text-xs">
+            <Clock className="w-8 h-8 text-purple-400 mx-auto mb-2" />
+            <p className="font-semibold text-slate-700">No Recent Activity</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Platform activity and audit logs will appear here in V2.</p>
+          </div>
+        ) : (
+          activities.map((act) => (
           <div key={act.id} className="flex items-start gap-3 group">
             <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${act.color} border border-black/5`}>
               {getIcon(act.icon)}
@@ -62,7 +69,7 @@ export default function RecentActivity({ activities, onViewAll }) {
               </span>
             </div>
           </div>
-        ))}
+        )))}
       </div>
     </div>
   );

@@ -13,14 +13,17 @@ export const AuthProvider = ({ children }) => {
       if (token) {
         try {
           const userData = await authService.getCurrentUser();
-          if (userData && userData.user) {
-            setUser(userData.user);
-          } else if (userData) {
-            setUser(userData);
+          const activeUser = userData?.user || userData;
+          if (activeUser) {
+            setUser(activeUser);
+            localStorage.setItem('user', JSON.stringify(activeUser));
           }
         } catch(e) {
           localStorage.removeItem('accessToken');
+          localStorage.removeItem('user');
         }
+      } else {
+        localStorage.removeItem('user');
       }
       setIsLoading(false);
     };
@@ -31,11 +34,15 @@ export const AuthProvider = ({ children }) => {
     // Real PostgreSQL API Call:
     const data = await authService.login(email, password);
     setUser(data.user);
+    if (data.user) {
+      localStorage.setItem('user', JSON.stringify(data.user));
+    }
     return data;
   };
 
   const logout = async () => {
     await authService.logout();
+    localStorage.removeItem('user');
     setUser(null);
   };
 

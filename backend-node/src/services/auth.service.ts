@@ -76,6 +76,7 @@ export class AuthService {
         id: user.id,
         name: user.name,
         email: user.email,
+        organization_id: user.organization_id,
         role: primaryRole?.name || 'USER',
         permissions,
       },

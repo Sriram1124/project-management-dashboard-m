@@ -5,27 +5,34 @@ import {
   Users, 
   ShieldCheck, 
   BarChart3, 
-  ArrowRight,
-  LogOut,
-  Hash
+  ArrowRight, 
+  LogOut, 
+  Hash 
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 export default function Sidebar({ 
   currentView, 
   setCurrentView, 
-  activeProjectId,
-  onExitProject,
-  internCount = 48, 
+  activeProjectId, 
+  onExitProject, 
+  internCount = 0, 
   currentRole, 
-  onTogglePerspective,
-  onLogout
+  onTogglePerspective, 
+  onLogout,
+  user
 }) {
+  const { user: authUser } = useAuth();
+  const userName = user?.name || authUser?.name || 'Program Manager';
+  const userRole = user?.role || authUser?.role || 'Program Manager';
+  const userAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=7C3AED&color=fff`;
+
   const isProjectWorkspace = Boolean(activeProjectId);
 
   const coreItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'projects', label: 'Projects', icon: FolderKanban },
-    { id: 'interns', label: 'Interns', icon: Users, badge: internCount },
+    { id: 'interns', label: 'Interns', icon: Users, badge: internCount > 0 ? internCount : null },
     { id: 'tech-leads', label: 'Tech Leads', icon: ShieldCheck },
   ];
 
@@ -188,13 +195,13 @@ export default function Sidebar({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img
-              src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80"
-              alt="Sarah Mitchell"
+              src={userAvatar}
+              alt={userName}
               className="w-7 h-7 rounded-md object-cover border border-purple-400/40"
             />
             <div className="flex flex-col leading-tight">
-              <span className="text-xs font-semibold text-white">Sarah Mitchell</span>
-              <span className="text-[10px] text-purple-300/70">Program Manager</span>
+              <span className="text-xs font-semibold text-white">{userName}</span>
+              <span className="text-[10px] text-purple-300/70">{userRole}</span>
             </div>
           </div>
           <button 

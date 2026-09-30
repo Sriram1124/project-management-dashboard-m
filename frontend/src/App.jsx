@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './shared/components/ProtectedRoute';
+import ErrorBoundary from './shared/components/ErrorBoundary';
 
 import LoginView from './features/auth/LoginView';
 import ManagerApp from './ManagerApp';
@@ -44,7 +45,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <ErrorBoundary>
+          <AppRoutes />
+        </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
   );

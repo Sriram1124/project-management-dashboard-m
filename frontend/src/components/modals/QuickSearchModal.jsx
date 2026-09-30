@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, X, Users, FolderKanban, CheckSquare, FileText, ArrowRight } from 'lucide-react';
-import { mockInterns, mockProjects, mockTasks } from '../../data/mockData';
+import { Search, X, Users, FolderKanban, ArrowRight } from 'lucide-react';
+import { projectsService } from '../../services/projects.service';
 
 export default function QuickSearchModal({ isOpen, onClose, onSelectResult }) {
   const [query, setQuery] = useState('');
+  const [projects, setProjects] = useState([]);
+  const [users, setUsers] = useState([]);
   const inputRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 50);
+      projectsService.getProjects().then((data) => setProjects(data?.projects || [])).catch(() => {});
+      projectsService.getUsers().then((data) => setUsers(data?.users || [])).catch(() => {});
     } else {
       setQuery('');
     }
@@ -18,23 +22,19 @@ export default function QuickSearchModal({ isOpen, onClose, onSelectResult }) {
 
   const q = query.toLowerCase().trim();
 
-  const filteredInterns = q ? mockInterns.filter(i => 
-    i.name.toLowerCase().includes(q) || 
-    i.project.toLowerCase().includes(q) || 
-    i.section.toLowerCase().includes(q)
+  const filteredUsers = q ? users.filter(u => 
+    (u.name && u.name.toLowerCase().includes(q)) || 
+    (u.email && u.email.toLowerCase().includes(q)) || 
+    (u.role && u.role.toLowerCase().includes(q))
   ).slice(0, 4) : [];
 
-  const filteredProjects = q ? mockProjects.filter(p => 
-    p.name.toLowerCase().includes(q) || 
-    p.lead.toLowerCase().includes(q)
-  ).slice(0, 3) : [];
+  const filteredProjects = q ? projects.filter(p => 
+    (p.name && p.name.toLowerCase().includes(q)) || 
+    (p.description && p.description.toLowerCase().includes(q)) ||
+    (p.owner?.name && p.owner.name.toLowerCase().includes(q))
+  ).slice(0, 4) : [];
 
-  const filteredTasks = q ? mockTasks.filter(t => 
-    t.title.toLowerCase().includes(q) || 
-    t.assignee.toLowerCase().includes(q)
-  ).slice(0, 3) : [];
-
-  const hasResults = filteredInterns.length > 0 || filteredProjects.length > 0 || filteredTasks.length > 0;
+  const hasResults = filteredUsers.length > 0 || filteredProjects.length > 0;
 
   return (
     <div 
@@ -53,7 +53,7 @@ export default function QuickSearchModal({ isOpen, onClose, onSelectResult }) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search interns, projects, tasks, leads..."
+            placeholder="Search projects, members, leads..."
             className="w-full text-sm text-slate-800 placeholder-slate-400 focus:outline-none"
           />
           {query && (
@@ -73,8 +73,8 @@ export default function QuickSearchModal({ isOpen, onClose, onSelectResult }) {
         <div className="p-4 max-h-96 overflow-y-auto space-y-4">
           {!q ? (
             <div className="py-8 text-center text-xs text-slate-400 space-y-1">
-              <p className="font-semibold text-slate-600">Quick Search across InternHub</p>
-              <p>Type an intern name, project track, task title, or section code (e.g. "Aarav", "AI", "A1")</p>
+              <p className="font-semibold text-slate-600">Quick Search across Workspace</p>
+              <p>Type a project title or member name to quickly navigate</p>
             </div>
           ) : !hasResults ? (
             <div className="py-8 text-center text-xs text-slate-400">
@@ -82,33 +82,33 @@ export default function QuickSearchModal({ isOpen, onClose, onSelectResult }) {
             </div>
           ) : (
             <>
-              {/* Interns Section */}
-              {filteredInterns.length > 0 && (
+              {/* Users Section */}
+              {filteredUsers.length > 0 && (
                 <div>
                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Users className="w-3 h-3 text-purple-600" />
-                    <span>Interns</span>
+                    <span>Members & Interns</span>
                   </div>
                   <div className="space-y-1">
-                    {filteredInterns.map((intern) => (
+                    {filteredUsers.map((u) => (
                       <div
-                        key={intern.id}
+                        key={u.id}
                         onClick={() => {
-                          onSelectResult?.('interns', intern);
+                          onSelectResult?.('interns', u);
                           onClose();
                         }}
                         className="flex items-center justify-between p-2.5 rounded-xl hover:bg-purple-50/60 cursor-pointer group transition-colors"
                       >
                         <div className="flex items-center gap-2.5">
                           <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 font-bold text-xs flex items-center justify-center">
-                            {intern.name.charAt(0)}
+                            {(u.name || u.email || 'U').charAt(0).toUpperCase()}
                           </div>
                           <div>
                             <span className="text-xs font-semibold text-slate-800 group-hover:text-purple-700">
-                              {intern.name}
+                              {u.name || 'Member'}
                             </span>
-                            <div className="text-[10px] text-slate-400">
-                              {intern.project} • Sec {intern.section}
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              {u.email} • {u.role}
                             </div>
                           </div>
                         </div>
@@ -141,45 +141,11 @@ export default function QuickSearchModal({ isOpen, onClose, onSelectResult }) {
                             {proj.name}
                           </span>
                           <div className="text-[10px] text-slate-400">
-                            Lead: {proj.lead} • {proj.internsCount} Interns • {proj.progress}% Progress
+                            Owner: {proj.owner?.name || proj.owner?.email || 'Unassigned'} • Status: {proj.status}
                           </div>
                         </div>
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                           {proj.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Tasks Section */}
-              {filteredTasks.length > 0 && (
-                <div>
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <CheckSquare className="w-3 h-3 text-purple-600" />
-                    <span>Tasks</span>
-                  </div>
-                  <div className="space-y-1">
-                    {filteredTasks.map((task) => (
-                      <div
-                        key={task.id}
-                        onClick={() => {
-                          onSelectResult?.('tasks', task);
-                          onClose();
-                        }}
-                        className="flex items-center justify-between p-2.5 rounded-xl hover:bg-purple-50/60 cursor-pointer group transition-colors"
-                      >
-                        <div>
-                          <span className="text-xs font-semibold text-slate-800 group-hover:text-purple-700">
-                            {task.title}
-                          </span>
-                          <div className="text-[10px] text-slate-400">
-                            Assignee: {task.assignee} • Due: {task.due}
-                          </div>
-                        </div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                          {task.status}
                         </span>
                       </div>
                     ))}
@@ -193,4 +159,3 @@ export default function QuickSearchModal({ isOpen, onClose, onSelectResult }) {
     </div>
   );
 }
-
