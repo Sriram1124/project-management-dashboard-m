@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, Lock, CheckCircle2, AlertCircle, Plus, Sparkles } from 'lucide-react';
+import { Clock, Lock, CheckCircle2, AlertCircle, Plus, Sparkles, User } from 'lucide-react';
 import { workItemsService } from '../services/workItemsService';
 
 const COLUMNS = [
@@ -13,6 +13,7 @@ const COLUMNS = [
 export default function PersonalKanbanBoard({
   workItems = [],
   onTaskClick,
+  onTaskUpdated,
   onToast
 }) {
   const [draggedId, setDraggedId] = useState(null);
@@ -42,7 +43,7 @@ export default function PersonalKanbanBoard({
     }
   };
 
-  const handleDrop = (e, targetStatus) => {
+  const handleDrop = async (e, targetStatus) => {
     e.preventDefault();
     setDragOverCol(null);
     const taskId = e.dataTransfer.getData('text/plain');
@@ -50,8 +51,13 @@ export default function PersonalKanbanBoard({
 
     const task = workItems.find((w) => w.id === taskId);
     if (task && task.status !== targetStatus) {
-      workItemsService.updateWorkItem(taskId, { status: targetStatus });
-      onToast?.(`Moved ${task.id} to ${targetStatus.replace('_', ' ')}`);
+      try {
+        await workItemsService.updateWorkItem(taskId, { status: targetStatus });
+        onToast?.(`Moved ${task.id} to ${targetStatus.replace('_', ' ')}`);
+        onTaskUpdated?.();
+      } catch (err) {
+        onToast?.(err.message || 'Failed to update status');
+      }
     }
   };
 
@@ -77,6 +83,8 @@ export default function PersonalKanbanBoard({
         return 'text-emerald-700 bg-emerald-50';
       case 'BUG':
         return 'text-rose-700 bg-rose-50';
+      case 'SUBTASK':
+        return 'text-slate-700 bg-slate-100';
       default:
         return 'text-blue-700 bg-blue-50';
     }
@@ -124,6 +132,7 @@ export default function PersonalKanbanBoard({
                   const isOverdue = workItemsService.isOverdue(task);
                   const isBlocked = task.status === 'BLOCKED';
                   const isCompleted = task.status === 'COMPLETED';
+                  const assignees = task.assignees || task.work_item_assignees || [];
 
                   return (
                     <div
@@ -175,7 +184,7 @@ export default function PersonalKanbanBoard({
 
                       {/* Project / Category */}
                       <div className="text-[10px] text-slate-400 mt-1 truncate">
-                        {task.project_name || 'Personal Goal'}
+                        {task.project_name || (task.project_id ? 'Project Task' : 'Personal Goal')}
                       </div>
 
                       {/* Divider */}
@@ -198,23 +207,25 @@ export default function PersonalKanbanBoard({
                           >
                             {isOverdue
                               ? 'Overdue'
-                              : new Date(task.due_date).toLocaleDateString([], {
+                              : task.due_date
+                              ? new Date(task.due_date).toLocaleDateString([], {
                                   month: 'short',
                                   day: 'numeric'
-                                })}
+                                })
+                              : 'No due date'}
                           </span>
                         </div>
 
                         {/* Assignee Avatar */}
                         <div className="flex items-center -space-x-1">
-                          {task.work_item_assignees?.map((a) => (
-                            <img
-                              key={a.id}
-                              src={a.avatar}
-                              alt={a.name}
-                              title={a.name}
-                              className="w-5 h-5 rounded-full border border-white object-cover"
-                            />
+                          {assignees.map((a, idx) => (
+                            <div
+                              key={a.user_id || a.id || idx}
+                              title={a.name || a.email}
+                              className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-bold text-[9px] flex items-center justify-center border border-white"
+                            >
+                              {a.name ? a.name.charAt(0).toUpperCase() : 'U'}
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -229,4 +240,3 @@ export default function PersonalKanbanBoard({
     </div>
   );
 }
-

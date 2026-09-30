@@ -1,7 +1,7 @@
-import React from 'react';
 import { 
   LayoutDashboard, 
   FolderKanban, 
+  CheckSquare,
   Users, 
   ShieldCheck, 
   BarChart3, 
@@ -32,6 +32,7 @@ export default function Sidebar({
   const coreItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'projects', label: 'Projects', icon: FolderKanban },
+    { id: 'my-tasks', label: 'My Tasks', icon: CheckSquare },
     { id: 'interns', label: 'Interns', icon: Users, badge: internCount > 0 ? internCount : null },
     { id: 'tech-leads', label: 'Tech Leads', icon: ShieldCheck },
   ];

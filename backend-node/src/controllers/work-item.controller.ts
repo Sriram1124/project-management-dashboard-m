@@ -1,0 +1,142 @@
+import { Request, Response } from 'express';
+import { WorkItemService } from '../services/work-item.service';
+
+export class WorkItemController {
+  private static handleError(res: Response, error: any) {
+    const msg = error?.message || 'Internal server error';
+
+    if (
+      msg.includes('not found') ||
+      msg === 'Work item not found' ||
+      msg === 'Project not found' ||
+      msg === 'Assignee not found on this work item'
+    ) {
+      res.status(404).json({ error: msg });
+      return;
+    }
+
+    if (
+      msg.includes('Forbidden') ||
+      msg.includes('forbidden') ||
+      msg.includes('permission') ||
+      msg.includes('cannot modify') ||
+      msg.includes('only the creator')
+    ) {
+      res.status(403).json({ error: msg });
+      return;
+    }
+
+    if (
+      msg.includes('required') ||
+      msg.includes('Invalid') ||
+      msg.includes('must have') ||
+      msg.includes('cannot have') ||
+      msg.includes('cannot be') ||
+      msg.includes('Cross-project') ||
+      msg.includes('Cannot delete') ||
+      msg.includes('is not a member') ||
+      msg.includes('standalone')
+    ) {
+      res.status(400).json({ error: msg });
+      return;
+    }
+
+    res.status(500).json({ error: msg });
+  }
+
+  static async create(req: Request, res: Response): Promise<void> {
+    try {
+      const user = (req as any).fullUser;
+      const workItem = await WorkItemService.createWorkItem(user, req.body);
+      res.status(201).json({ work_item: workItem });
+    } catch (error) {
+      WorkItemController.handleError(res, error);
+    }
+  }
+
+  static async list(req: Request, res: Response): Promise<void> {
+    try {
+      const user = (req as any).fullUser;
+      const { project_id, type, status, priority, assigned_to_me, my_personal } = req.query;
+
+      const workItems = await WorkItemService.listWorkItems(user, {
+        project_id: project_id as string,
+        type: type as string,
+        status: status as string,
+        priority: priority as string,
+        assigned_to_me: assigned_to_me === 'true',
+        my_personal: my_personal === 'true',
+      });
+
+      res.status(200).json({ work_items: workItems });
+    } catch (error) {
+      WorkItemController.handleError(res, error);
+    }
+  }
+
+  static async getById(req: Request, res: Response): Promise<void> {
+    try {
+      const user = (req as any).fullUser;
+      const { id } = req.params;
+
+      const workItem = await WorkItemService.getWorkItemById(id, user);
+      res.status(200).json({ work_item: workItem });
+    } catch (error) {
+      WorkItemController.handleError(res, error);
+    }
+  }
+
+  static async update(req: Request, res: Response): Promise<void> {
+    try {
+      const user = (req as any).fullUser;
+      const { id } = req.params;
+
+      const workItem = await WorkItemService.updateWorkItem(id, user, req.body);
+      res.status(200).json({ work_item: workItem });
+    } catch (error) {
+      WorkItemController.handleError(res, error);
+    }
+  }
+
+  static async delete(req: Request, res: Response): Promise<void> {
+    try {
+      const user = (req as any).fullUser;
+      const { id } = req.params;
+
+      const result = await WorkItemService.deleteWorkItem(id, user);
+      res.status(200).json(result);
+    } catch (error) {
+      WorkItemController.handleError(res, error);
+    }
+  }
+
+  static async addAssignees(req: Request, res: Response): Promise<void> {
+    try {
+      const user = (req as any).fullUser;
+      const { id } = req.params;
+
+      const userIds = Array.isArray(req.body.user_ids)
+        ? req.body.user_ids
+        : req.body.user_id
+        ? [req.body.user_id]
+        : [];
+
+      const workItem = await WorkItemService.addAssignees(id, user, userIds);
+      res.status(200).json({ work_item: workItem });
+    } catch (error) {
+      WorkItemController.handleError(res, error);
+    }
+  }
+
+  static async removeAssignee(req: Request, res: Response): Promise<void> {
+    try {
+      const user = (req as any).fullUser;
+      const { id, userId } = req.params;
+
+      const result = await WorkItemService.removeAssignee(id, user, userId);
+      res.status(200).json(result);
+    } catch (error) {
+      WorkItemController.handleError(res, error);
+    }
+  }
+}

@@ -40,7 +40,8 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
   const { user: authUser } = useAuth();
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [selectedProjectId, setSelectedProjectId] = useState(null);
-  const [workItems, setWorkItems] = useState(workItemsService.getAllWorkItems());
+  const [workItems, setWorkItems] = useState([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
   const [forms, setForms] = useState(formsService.getAssignedForms());
   const [notifications, setNotifications] = useState(notificationsService.getAllNotifications());
 
@@ -57,27 +58,42 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
   const unreadCount = notifications.filter((n) => !n.is_read).length;
   const pendingFormsCount = forms.filter((f) => f.submission_status === 'PENDING').length;
 
+  const loadWorkItems = async () => {
+    try {
+      setLoadingTasks(true);
+      const items = await workItemsService.listWorkItems({ assigned_to_me: true });
+      setWorkItems(items || []);
+    } catch (err) {
+      console.error('Failed to load intern work items:', err);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+
   useEffect(() => {
-    const unsubTasks = workItemsService.subscribe(setWorkItems);
+    loadWorkItems();
     const unsubForms = formsService.subscribe(setForms);
     const unsubNotifs = notificationsService.subscribe(setNotifications);
 
     return () => {
-      unsubTasks();
       unsubForms();
       unsubNotifs();
     };
   }, []);
 
-  const handleToggleTask = (taskId) => {
-    workItemsService.toggleComplete(taskId);
-    const item = workItemsService.getWorkItemById(taskId);
-    if (item) {
+  const handleToggleTask = async (taskId) => {
+    const item = workItems.find((w) => w.id === taskId);
+    if (!item) return;
+    try {
+      const updated = await workItemsService.toggleComplete(item);
+      setWorkItems((prev) => prev.map((w) => (w.id === taskId ? updated : w)));
       onToast?.(
-        item.status === 'COMPLETED'
-          ? `Marked "${item.title}" completed!`
-          : `Reopened "${item.title}"`
+        updated.status === 'COMPLETED'
+          ? `Marked "${updated.title}" completed!`
+          : `Reopened "${updated.title}"`
       );
+    } catch (err) {
+      onToast?.(err.message || 'Failed to update task status');
     }
   };
 
@@ -311,6 +327,8 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
             {currentTab === 'tasks' && (
               <MyTasksTab
                 workItems={workItems}
+                loading={loadingTasks}
+                onReload={loadWorkItems}
                 onOpenTaskModal={(t) => setSelectedTask(t)}
                 onOpenCreatePersonalTask={() => setIsCreatePersonalOpen(true)}
                 onToggleTask={handleToggleTask}
@@ -345,6 +363,11 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
         workItem={selectedTask}
         isOpen={Boolean(selectedTask)}
         onClose={() => setSelectedTask(null)}
+        onTaskUpdated={loadWorkItems}
+        onTaskDeleted={() => {
+          setSelectedTask(null);
+          loadWorkItems();
+        }}
         onToast={onToast}
       />
 
@@ -359,7 +382,7 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
       <CreatePersonalTaskModal
         isOpen={isCreatePersonalOpen}
         onClose={() => setIsCreatePersonalOpen(false)}
-        onTaskCreated={() => setWorkItems(workItemsService.getAllWorkItems())}
+        onTaskCreated={() => loadWorkItems()}
         onToast={onToast}
       />
 

@@ -7,6 +7,7 @@ import ProjectWorkspaceView from './components/views/projects/ProjectWorkspaceVi
 import InternsView from './components/views/InternsView';
 import TechLeadsView from './components/views/TechLeadsView';
 import TasksView from './components/views/TasksView';
+import ManagerMyTasksView from './components/views/ManagerMyTasksView';
 import ReportsView from './components/views/ReportsView';
 import InternPortalView from './components/views/InternPortalView';
 import AlertModal from './components/modals/AlertModal';
@@ -153,6 +154,8 @@ export default function ManagerApp() {
         return 'Intern Roster & Oversight';
       case 'tech-leads':
         return 'Tech Leads Console';
+      case 'my-tasks':
+        return 'My Assigned Tasks & Personal Goals';
       case 'tasks':
         return 'Task Deadlines & Boards';
       case 'reports':
@@ -173,6 +176,7 @@ export default function ManagerApp() {
       {
         dashboard: 'Manager Dashboard',
         projects: 'Projects Directory',
+        'my-tasks': 'My Tasks',
         interns: 'Interns',
         'tech-leads': 'Tech Leads',
         tasks: 'Tasks',
@@ -274,7 +278,8 @@ export default function ManagerApp() {
                   }
                 />
               )}
-              {currentView === 'tasks' && <TasksView />}
+              {currentView === 'my-tasks' && <ManagerMyTasksView onToast={triggerToast} />}
+              {currentView === 'tasks' && <TasksView onToast={triggerToast} />}
               {currentView === 'reports' && <ReportsView />}
               {currentView === 'channels' && (
                 <TeamsChannelView

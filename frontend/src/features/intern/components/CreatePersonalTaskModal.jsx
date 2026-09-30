@@ -12,26 +12,37 @@ export default function CreatePersonalTaskModal({
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
   const [dueDate, setDueDate] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || loading) return;
 
-    const newTask = workItemsService.createPersonalTask({
-      title,
-      description,
-      priority,
-      dueDate
-    });
+    try {
+      setLoading(true);
+      setError('');
+      const newTask = await workItemsService.createPersonalTask({
+        title: title.trim(),
+        description: description.trim(),
+        priority,
+        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+      });
 
-    onToast?.(`Personal task "${title.trim()}" created!`);
-    onTaskCreated?.(newTask);
-    setTitle('');
-    setDescription('');
-    setDueDate('');
-    onClose();
+      onToast?.(`Personal task "${title.trim()}" created!`);
+      onTaskCreated?.(newTask);
+      setTitle('');
+      setDescription('');
+      setDueDate('');
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Failed to create personal task');
+      onToast?.(err.message || 'Failed to create personal task');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -61,6 +72,13 @@ export default function CreatePersonalTaskModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
+          {error && (
+            <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+              <span>{error}</span>
+            </div>
+          )}
+
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">
               Task Title *

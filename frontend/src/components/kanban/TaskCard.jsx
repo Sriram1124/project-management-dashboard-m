@@ -8,17 +8,25 @@ export default function TaskCard({
   onDragStart,
   onDragEnd,
 }) {
-  const isBlocked = task.status === KANBAN_STATUSES.BLOCKED;
-  const isCompleted = task.status === KANBAN_STATUSES.COMPLETED;
+  const isBlocked = task.status === KANBAN_STATUSES.BLOCKED || task.status === 'BLOCKED';
+  const isCompleted = task.status === KANBAN_STATUSES.COMPLETED || task.status === 'COMPLETED';
+  const isOverdue = Boolean(task.is_overdue || task.isOverdue);
+  const formattedDueDate = task.due_date 
+    ? new Date(task.due_date).toLocaleDateString([], { month: 'short', day: 'numeric' })
+    : task.dueDate || 'No date';
 
   // Restrained enterprise priority badges
   const getPriorityBadgeStyle = (priority) => {
     switch (priority) {
+      case 'URGENT':
       case KANBAN_PRIORITIES.HIGH:
+      case 'HIGH':
         return 'bg-rose-50 text-rose-700 border border-rose-200';
       case KANBAN_PRIORITIES.MEDIUM:
+      case 'MEDIUM':
         return 'bg-amber-50 text-amber-700 border border-amber-200';
       case KANBAN_PRIORITIES.LOW:
+      case 'LOW':
         return 'bg-slate-100 text-slate-600 border border-slate-200';
       case KANBAN_PRIORITIES.BLOCKED:
         return 'bg-rose-100 text-rose-800 border border-rose-300 font-semibold';
@@ -28,6 +36,9 @@ export default function TaskCard({
         return 'bg-slate-100 text-slate-700 border border-slate-200';
     }
   };
+
+  const assignees = task.assignees || (task.assignee ? [task.assignee] : []);
+  const parentTitle = task.parent?.title || task.epic || null;
 
   return (
     <div
@@ -45,9 +56,16 @@ export default function TaskCard({
     >
       {/* Top Row: Issue ID (left) and Priority (right) */}
       <div className="flex items-center justify-between gap-1 mb-1.5">
-        <span className="text-[11px] font-mono font-medium text-slate-500 group-hover:text-purple-700 transition-colors">
-          {task.id}
-        </span>
+        <div className="flex items-center gap-1.5">
+          {task.type && (
+            <span className="text-[9px] font-bold font-mono px-1 py-0.2 rounded bg-purple-50 text-purple-700 border border-purple-200">
+              {task.type}
+            </span>
+          )}
+          <span className="text-[11px] font-mono font-medium text-slate-500 group-hover:text-purple-700 transition-colors">
+            {task.id}
+          </span>
+        </div>
 
         <span
           className={`px-1.5 py-0.2 rounded text-[10px] font-medium inline-flex items-center gap-1 ${getPriorityBadgeStyle(
@@ -63,21 +81,18 @@ export default function TaskCard({
       {/* Task Title */}
       <h4
         className={`text-xs font-semibold leading-snug text-slate-900 group-hover:text-purple-700 transition-colors line-clamp-2 ${
-          isCompleted ? 'text-slate-700' : ''
+          isCompleted ? 'text-slate-700 line-through' : ''
         }`}
       >
         {task.title}
       </h4>
 
-      {/* Epic & Story Points */}
-      <div className="flex items-center text-[11px] text-slate-500 mt-1">
-        <span className="truncate max-w-[170px]">{task.epic}</span>
-        {task.storyPoints !== undefined && (
-          <span className="shrink-0 ml-1">
-            · {task.storyPoints} SP
-          </span>
-        )}
-      </div>
+      {/* Parent or Category */}
+      {parentTitle && (
+        <div className="flex items-center text-[11px] text-slate-500 mt-1">
+          <span className="truncate max-w-[170px]">{parentTitle}</span>
+        </div>
+      )}
 
       {/* Card Divider */}
       <div className="my-2 border-t border-slate-100" />
@@ -87,25 +102,39 @@ export default function TaskCard({
         <div className="flex items-center gap-1">
           <Clock
             className={`w-3 h-3 ${
-              task.isOverdue ? 'text-rose-600' : 'text-slate-400'
+              isOverdue ? 'text-rose-600' : 'text-slate-400'
             }`}
           />
           <span
             className={`text-[10px] font-medium ${
-              task.isOverdue ? 'text-rose-600 font-semibold' : 'text-slate-500'
+              isOverdue ? 'text-rose-600 font-semibold' : 'text-slate-500'
             }`}
           >
-            Due {task.dueDate}
+            {isOverdue ? 'Overdue' : `Due ${formattedDueDate}`}
           </span>
         </div>
 
-        {task.assignee ? (
-          <img
-            src={task.assignee.avatar}
-            alt={task.assignee.name}
-            title={task.assignee.name}
-            className="w-5 h-5 rounded-full object-cover border border-slate-200"
-          />
+        {assignees.length > 0 ? (
+          <div className="flex items-center -space-x-1">
+            {assignees.slice(0, 3).map((a, idx) => (
+              <div
+                key={a.user_id || a.id || idx}
+                title={a.name || a.email}
+                className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-bold text-[9px] flex items-center justify-center border border-white"
+              >
+                {a.avatar ? (
+                  <img src={a.avatar} alt={a.name} className="w-full h-full rounded-full object-cover" />
+                ) : (
+                  (a.name || 'U').charAt(0).toUpperCase()
+                )}
+              </div>
+            ))}
+            {assignees.length > 3 && (
+              <span className="text-[9px] text-slate-500 font-bold ml-1">
+                +{assignees.length - 3}
+              </span>
+            )}
+          </div>
         ) : (
           <div
             title="Unassigned"

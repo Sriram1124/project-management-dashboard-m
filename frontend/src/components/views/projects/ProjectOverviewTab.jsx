@@ -12,6 +12,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { projectsService } from '../../../services/projects.service';
+import TasksView from '../TasksView';
 
 export default function ProjectOverviewTab({ projectId, project, onToast }) {
   const [members, setMembers] = useState([]);
@@ -189,23 +190,8 @@ export default function ProjectOverviewTab({ projectId, project, onToast }) {
         )}
       </div>
 
-      {/* Work Management Module Placeholder (V2 Scope) */}
-      <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
-            <Layers className="w-5 h-5" />
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-slate-800">Work Management Module</h4>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Task tracking, Epics, Sprints, and Kanban boards will be available in the upcoming Work Management module.
-            </p>
-          </div>
-        </div>
-        <span className="text-[11px] font-semibold text-purple-700 bg-white border border-purple-200 px-3 py-1 rounded-full shrink-0 self-start sm:self-auto">
-          Planned for V2
-        </span>
-      </div>
+      {/* Work Management Section (Real Backend Tasks API) */}
+      <TasksView projectId={projectId || project?.id} onToast={onToast} />
     </div>
   );
 }
