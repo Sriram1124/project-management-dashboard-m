@@ -2,6 +2,27 @@ import React, { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 export default function InternAttendance({ attendanceData, onDrilldown }) {
+  if (!attendanceData || !attendanceData.percentage) {
+    return (
+      <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-card flex flex-col justify-between">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-slate-900 tracking-tight">
+            Intern Attendance
+          </h3>
+          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded">
+            Planned for V2
+          </span>
+        </div>
+        <div className="py-12 text-center text-slate-400">
+          <p className="font-semibold text-slate-700 text-sm">No Attendance Recorded</p>
+          <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">
+            Attendance check-ins, timesheet reconciliation, and absence alerts are planned for V2.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const [timeframe, setTimeframe] = useState('This Week');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 

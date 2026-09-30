@@ -92,30 +92,53 @@ async function main() {
     }
   }
 
-  // 4. Create Users
+  // 4. Default Organization
+  let org = await prisma.organization.findFirst({ where: { name: 'Dailoqa Technologies' } });
+  if (!org) {
+    org = await prisma.organization.create({
+      data: { name: 'Dailoqa Technologies' },
+    });
+  }
+
+  // 5. Create / Update Users
   const passwordHash = await argon2.hash('password123');
   
   const manager = await prisma.user.upsert({
     where: { email: 'manager@dailoqa.com' },
-    update: {},
+    update: { organization_id: org.id },
     create: {
       name: 'Test Manager',
       email: 'manager@dailoqa.com',
       password_hash: passwordHash,
+      organization_id: org.id,
     },
   });
 
   const intern = await prisma.user.upsert({
     where: { email: 'intern@dailoqa.com' },
-    update: {},
+    update: { organization_id: org.id },
     create: {
       name: 'Test Intern',
       email: 'intern@dailoqa.com',
       password_hash: passwordHash,
+      organization_id: org.id,
     },
   });
 
-  // 5. Assign Users to Roles
+  const lead = await prisma.user.upsert({
+    where: { email: 'lead@dailoqa.com' },
+    update: { organization_id: org.id },
+    create: {
+      name: 'Alex Tech Lead',
+      email: 'lead@dailoqa.com',
+      password_hash: passwordHash,
+      organization_id: org.id,
+    },
+  });
+
+  // 6. Assign Users to Roles
+  const techLeadRole = await prisma.role.findUnique({ where: { name: 'TECH_LEAD' } });
+
   if (managerRole && manager) {
     await prisma.userRole.upsert({
       where: {
@@ -148,7 +171,23 @@ async function main() {
     });
   }
 
-  console.log('Seeding completed.');
+  if (techLeadRole && lead) {
+    await prisma.userRole.upsert({
+      where: {
+        user_id_role_id: {
+          user_id: lead.id,
+          role_id: techLeadRole.id
+        }
+      },
+      update: {},
+      create: {
+        user_id: lead.id,
+        role_id: techLeadRole.id
+      }
+    });
+  }
+
+  console.log('Seeding completed successfully.');
 }
 
 main()
@@ -159,3 +198,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

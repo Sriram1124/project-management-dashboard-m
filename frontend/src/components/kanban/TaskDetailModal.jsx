@@ -1,94 +1,226 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Clock, 
   User, 
   CheckCircle2, 
-  Circle, 
+  AlertCircle, 
   Trash2, 
-  Send, 
-  MessageSquare, 
-  Lock, 
   Edit2, 
-  Save 
+  Save, 
+  Loader2, 
+  Plus, 
+  GitFork, 
+  Calendar,
+  Layers
 } from 'lucide-react';
-import { 
-  COLUMNS_CONFIG, 
-  KANBAN_PRIORITIES, 
-  MOCK_ASSIGNEES, 
-  MOCK_EPICS 
-} from '../../constants/kanban';
+import { workItemsService } from '../../services/workItems.service';
+import { projectsService } from '../../services/projects.service';
+
+const STATUS_OPTIONS = [
+  { id: 'TODO', label: 'To Do' },
+  { id: 'IN_PROGRESS', label: 'In Progress' },
+  { id: 'IN_REVIEW', label: 'In Review' },
+  { id: 'COMPLETED', label: 'Completed' },
+  { id: 'BLOCKED', label: 'Blocked' },
+];
+
+const PRIORITY_OPTIONS = [
+  { id: 'LOW', label: 'Low' },
+  { id: 'MEDIUM', label: 'Medium' },
+  { id: 'HIGH', label: 'High' },
+  { id: 'URGENT', label: 'Urgent' },
+];
 
 export default function TaskDetailModal({
   task,
   isOpen,
   onClose,
-  onUpdateTask,
-  onDeleteTask,
+  onTaskUpdated,
+  onTaskDeleted,
+  onToast,
 }) {
   if (!isOpen || !task) return null;
 
+  const [liveTask, setLiveTask] = useState(task);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState('');
+
+  // Editable fields
   const [isEditing, setIsEditing] = useState(false);
-  const [editedTitle, setEditedTitle] = useState(task.title);
-  const [editedDesc, setEditedDesc] = useState(task.description || '');
-  const [status, setStatus] = useState(task.status);
-  const [priority, setPriority] = useState(task.priority);
-  const [assigneeId, setAssigneeId] = useState(task.assignee?.id || '');
-  const [epic, setEpic] = useState(task.epic);
-  const [storyPoints, setStoryPoints] = useState(task.storyPoints || 3);
-  const [dueDate, setDueDate] = useState(task.dueDate || '');
-  const [subtasks, setSubtasks] = useState(task.subtasks || []);
-  const [comments, setComments] = useState(task.comments || []);
-  const [newComment, setNewComment] = useState('');
+  const [title, setTitle] = useState(task.title || '');
+  const [description, setDescription] = useState(task.description || '');
+  const [status, setStatus] = useState(task.status || 'TODO');
+  const [priority, setPriority] = useState(task.priority || 'MEDIUM');
+  const [startDate, setStartDate] = useState(
+    task.start_date ? task.start_date.split('T')[0] : ''
+  );
+  const [dueDate, setDueDate] = useState(
+    task.due_date ? task.due_date.split('T')[0] : ''
+  );
 
-  const toggleSubtask = (stId) => {
-    const updated = subtasks.map((st) =>
-      st.id === stId ? { ...st, done: !st.done } : st
+  // Assignees
+  const [projectMembers, setProjectMembers] = useState([]);
+  const [selectedNewAssignee, setSelectedNewAssignee] = useState('');
+
+  // Reload task details from backend
+  const fetchTaskDetails = async (id) => {
+    try {
+      setLoading(true);
+      setError('');
+      const data = await workItemsService.getWorkItem(id);
+      setLiveTask(data);
+      setTitle(data.title || '');
+      setDescription(data.description || '');
+      setStatus(data.status || 'TODO');
+      setPriority(data.priority || 'MEDIUM');
+      setStartDate(data.start_date ? data.start_date.split('T')[0] : '');
+      setDueDate(data.due_date ? data.due_date.split('T')[0] : '');
+    } catch (err) {
+      setError(err.message || 'Failed to fetch task details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && task?.id) {
+      fetchTaskDetails(task.id);
+      setIsEditing(false);
+      setError('');
+    }
+  }, [isOpen, task?.id]);
+
+  // Load project members for assignee selection
+  useEffect(() => {
+    if (isOpen && liveTask?.project_id) {
+      projectsService
+        .getMembers(liveTask.project_id)
+        .then((members) => setProjectMembers(members || []))
+        .catch((err) => console.error('Failed to load project members:', err));
+    }
+  }, [isOpen, liveTask?.project_id]);
+
+  const handleStatusChange = async (newStatus) => {
+    try {
+      setStatus(newStatus);
+      const updated = await workItemsService.updateWorkItem(liveTask.id, { status: newStatus });
+      setLiveTask(updated);
+      onToast?.(`Status updated to ${newStatus}`);
+      onTaskUpdated?.(updated);
+    } catch (err) {
+      setError(err.message || 'Failed to update status');
+    }
+  };
+
+  const handlePriorityChange = async (newPriority) => {
+    try {
+      setPriority(newPriority);
+      const updated = await workItemsService.updateWorkItem(liveTask.id, { priority: newPriority });
+      setLiveTask(updated);
+      onToast?.(`Priority changed to ${newPriority}`);
+      onTaskUpdated?.(updated);
+    } catch (err) {
+      setError(err.message || 'Failed to update priority');
+    }
+  };
+
+  const handleSaveEdits = async () => {
+    if (!title.trim()) {
+      setError('Title cannot be empty');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError('');
+      const updated = await workItemsService.updateWorkItem(liveTask.id, {
+        title: title.trim(),
+        description: description.trim() || null,
+        status,
+        priority,
+        start_date: startDate ? new Date(startDate).toISOString() : null,
+        due_date: dueDate ? new Date(dueDate).toISOString() : null,
+      });
+
+      setLiveTask(updated);
+      setIsEditing(false);
+      onToast?.('Task details saved successfully');
+      onTaskUpdated?.(updated);
+    } catch (err) {
+      setError(err.message || 'Failed to save changes');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddAssignee = async () => {
+    if (!selectedNewAssignee) return;
+    try {
+      setError('');
+      const updated = await workItemsService.addAssignee(liveTask.id, selectedNewAssignee);
+      setLiveTask(updated);
+      setSelectedNewAssignee('');
+      onToast?.('Assignee added');
+      onTaskUpdated?.(updated);
+    } catch (err) {
+      setError(err.message || 'Failed to add assignee');
+    }
+  };
+
+  const handleRemoveAssignee = async (userId) => {
+    try {
+      setError('');
+      await workItemsService.removeAssignee(liveTask.id, userId);
+      setLiveTask((prev) => ({
+        ...prev,
+        assignees: prev.assignees.filter((a) => a.user_id !== userId && a.id !== userId),
+      }));
+      onToast?.('Assignee removed');
+      onTaskUpdated?.();
+    } catch (err) {
+      setError(err.message || 'Failed to remove assignee');
+    }
+  };
+
+  const handleDelete = async () => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete this ${(liveTask.type || 'task').toLowerCase()}?\n"${liveTask.title}"`
     );
-    setSubtasks(updated);
-    onUpdateTask?.({ ...task, subtasks: updated });
+    if (!confirmDelete) return;
+
+    try {
+      setDeleting(true);
+      setError('');
+      await workItemsService.deleteWorkItem(liveTask.id);
+      onToast?.('Task deleted successfully');
+      onTaskDeleted?.(liveTask.id);
+      onClose();
+    } catch (err) {
+      const msg = err.message || '';
+      if (msg.includes('child items') || msg.includes('children')) {
+        setError(
+          'This task cannot be deleted because it has child tasks. Remove or delete the child tasks first.'
+        );
+      } else {
+        setError(msg || 'Failed to delete task');
+      }
+      onToast?.(msg || 'Failed to delete task');
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const handleAddComment = (e) => {
-    e.preventDefault();
-    if (!newComment.trim()) return;
-
-    const added = [
-      ...comments,
-      {
-        id: `c-${Date.now()}`,
-        author: 'Sarah Mitchell',
-        time: 'Just now',
-        text: newComment.trim(),
-      },
-    ];
-    setComments(added);
-    setNewComment('');
-    onUpdateTask?.({ ...task, comments: added });
-  };
-
-  const handleSaveEdits = () => {
-    const updatedAssignee = MOCK_ASSIGNEES.find((a) => a.id === assigneeId) || null;
-    const updated = {
-      ...task,
-      title: editedTitle.trim() || task.title,
-      description: editedDesc.trim(),
-      status,
-      priority,
-      assignee: updatedAssignee,
-      epic,
-      storyPoints: Number(storyPoints) || task.storyPoints,
-      dueDate: dueDate.trim() || task.dueDate,
-      subtasks,
-      comments,
-    };
-    onUpdateTask?.(updated);
-    setIsEditing(false);
-  };
+  const isOverdue = liveTask.is_overdue || workItemsService.isOverdue(liveTask);
+  const children = liveTask.children || [];
+  const parent = liveTask.parent;
+  const currentAssignees = liveTask.assignees || [];
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
@@ -97,59 +229,56 @@ export default function TaskDetailModal({
       >
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-xs font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-200">
-              {task.id}
+          <div className="flex items-center gap-2.5">
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
+              {liveTask.type}
             </span>
-            <div className="flex items-center gap-2">
-              <select
-                value={status}
-                onChange={(e) => {
-                  setStatus(e.target.value);
-                  onUpdateTask?.({ ...task, status: e.target.value });
-                }}
-                className="px-2.5 py-1 text-xs font-bold rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-purple-500 shadow-2xs cursor-pointer"
-              >
-                {COLUMNS_CONFIG.map((col) => (
-                  <option key={col.id} value={col.id}>
-                    {col.title}
-                  </option>
-                ))}
-              </select>
-
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                {priority} Priority
+            <span className="text-xs font-mono font-medium text-slate-500">
+              {liveTask.id}
+            </span>
+            {isOverdue && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1">
+                <Clock className="w-2.5 h-2.5" />
+                <span>OVERDUE</span>
               </span>
-            </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setIsEditing(!isEditing)}
-              className={`p-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 ${
-                isEditing
-                  ? 'bg-purple-100 text-purple-700'
-                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-              }`}
-              title="Toggle Edit Mode"
-            >
-              <Edit2 className="w-4 h-4" />
-            </button>
+          <div className="flex items-center gap-2">
+            {!isEditing ? (
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+              >
+                <Edit2 className="w-3 h-3 text-slate-500" />
+                <span>Edit</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSaveEdits}
+                disabled={saving}
+                className="flex items-center gap-1 px-3 py-1 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                <span>Save</span>
+              </button>
+            )}
 
             <button
-              onClick={() => {
-                onDeleteTask?.(task.id);
-                onClose();
-              }}
-              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-              title="Delete Task"
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+              title="Delete task"
             >
-              <Trash2 className="w-4 h-4" />
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin text-rose-600" /> : <Trash2 className="w-4 h-4" />}
             </button>
 
             <button
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -157,183 +286,250 @@ export default function TaskDetailModal({
         </div>
 
         {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-5">
-          {/* Title & Description */}
+        <div className="p-6 overflow-y-auto space-y-5 text-xs">
+          {error && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl flex items-center gap-2 font-medium">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Title Area */}
           <div>
             {isEditing ? (
-              <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Title
+                </label>
                 <input
                   type="text"
-                  value={editedTitle}
-                  onChange={(e) => setEditedTitle(e.target.value)}
-                  className="w-full text-base font-bold text-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-purple-500"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full px-3 py-2 text-sm font-semibold rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:border-purple-600"
                 />
-                <textarea
-                  rows={3}
-                  value={editedDesc}
-                  onChange={(e) => setEditedDesc(e.target.value)}
-                  placeholder="Task description..."
-                  className="w-full text-xs text-slate-700 px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-purple-500"
-                />
-                <button
-                  onClick={handleSaveEdits}
-                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>Save Changes</span>
-                </button>
               </div>
             ) : (
-              <div>
-                <h3 className="text-base font-bold text-slate-900 leading-snug">
-                  {task.title}
-                </h3>
-                {task.description && (
-                  <p className="text-xs text-slate-600 mt-2 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    {task.description}
-                  </p>
-                )}
+              <h2 className="text-base font-bold text-slate-900 leading-snug">
+                {liveTask.title}
+              </h2>
+            )}
+          </div>
+
+          {/* Status & Priority Row */}
+          <div className="grid grid-cols-2 gap-3 p-3.5 bg-slate-50/80 rounded-xl border border-slate-200/70">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Status
+              </label>
+              <select
+                value={status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-semibold focus:outline-none focus:border-purple-600"
+              >
+                {STATUS_OPTIONS.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Priority
+              </label>
+              <select
+                value={priority}
+                onChange={(e) => handlePriorityChange(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-semibold focus:outline-none focus:border-purple-600"
+              >
+                {PRIORITY_OPTIONS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Description
+            </label>
+            {isEditing ? (
+              <textarea
+                rows={4}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:border-purple-600 resize-none"
+              />
+            ) : (
+              <div className="p-3 bg-white rounded-xl border border-slate-200 text-slate-700 leading-relaxed min-h-[60px] whitespace-pre-wrap">
+                {liveTask.description || <span className="text-slate-400 italic">No description provided.</span>}
               </div>
             )}
           </div>
 
-          {/* Metadata Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl bg-slate-50/80 border border-slate-100 text-xs">
+          {/* Timeline / Dates */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                Assignee
-              </span>
-              {task.assignee ? (
-                <div className="flex items-center gap-1.5">
-                  <img
-                    src={task.assignee.avatar}
-                    alt={task.assignee.name}
-                    className="w-5 h-5 rounded-full object-cover"
-                  />
-                  <span className="font-semibold text-slate-800 truncate">
-                    {task.assignee.name}
-                  </span>
-                </div>
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <span>Start Date</span>
+              </label>
+              {isEditing ? (
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800"
+                />
               ) : (
-                <span className="text-slate-400 font-medium">Unassigned</span>
+                <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700">
+                  {liveTask.start_date ? new Date(liveTask.start_date).toLocaleDateString() : 'Not set'}
+                </div>
               )}
             </div>
 
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                Epic
-              </span>
-              <span className="font-semibold text-slate-800">{task.epic}</span>
-            </div>
-
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                Story Points
-              </span>
-              <span className="font-semibold text-slate-800">{task.storyPoints} SP</span>
-            </div>
-
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                Due Date
-              </span>
-              <span
-                className={`font-semibold flex items-center gap-1 ${
-                  task.isOverdue ? 'text-rose-600' : 'text-slate-800'
-                }`}
-              >
-                <Clock className="w-3 h-3" />
-                <span>{task.dueDate}</span>
-              </span>
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <span>Due Date</span>
+              </label>
+              {isEditing ? (
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800"
+                />
+              ) : (
+                <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700">
+                  {liveTask.due_date ? new Date(liveTask.due_date).toLocaleDateString() : 'Not set'}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Subtasks Checklist */}
-          {subtasks.length > 0 && (
-            <div>
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5 flex items-center justify-between">
-                <span>Subtasks Checklist</span>
-                <span className="text-[10px] font-mono text-slate-400">
-                  {subtasks.filter((s) => s.done).length}/{subtasks.length} Completed
-                </span>
-              </h4>
-
-              <div className="space-y-2">
-                {subtasks.map((st) => (
-                  <div
-                    key={st.id}
-                    onClick={() => toggleSubtask(st.id)}
-                    className={`p-2.5 rounded-xl border flex items-center gap-2.5 text-xs cursor-pointer transition-colors ${
-                      st.done
-                        ? 'bg-emerald-50/40 border-emerald-200/80 text-slate-500 line-through'
-                        : 'bg-white border-slate-200 text-slate-800 hover:border-purple-300'
-                    }`}
-                  >
-                    {st.done ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    ) : (
-                      <Circle className="w-4 h-4 text-slate-300 shrink-0" />
-                    )}
-                    <span>{st.title}</span>
+          {/* Hierarchy Section: Parent & Children */}
+          {(parent || children.length > 0) && (
+            <div className="space-y-3 pt-2 border-t border-slate-100">
+              {parent && (
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Parent Work Item
+                  </span>
+                  <div className="p-2.5 bg-purple-50/60 border border-purple-100 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-200 text-purple-900">
+                        {parent.type}
+                      </span>
+                      <span className="font-semibold text-slate-800 truncate">
+                        {parent.title}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-purple-700 uppercase">
+                      {parent.status}
+                    </span>
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
+
+              {children.length > 0 && (
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Child Items ({children.length})
+                  </span>
+                  <div className="space-y-1.5">
+                    {children.map((child) => (
+                      <div
+                        key={child.id}
+                        className="p-2 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-200 text-slate-700">
+                            {child.type}
+                          </span>
+                          <span className="font-medium text-slate-800 truncate">
+                            {child.title}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 font-semibold">
+                          {child.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Activity / Comments */}
+          {/* Assignees Section */}
           <div className="pt-2 border-t border-slate-100">
-            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <MessageSquare className="w-3.5 h-3.5 text-purple-600" />
-              <span>Activity & Comments ({comments.length})</span>
-            </h4>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-slate-500" />
+                <span>Assignees ({currentAssignees.length})</span>
+              </label>
+            </div>
 
-            {comments.length > 0 && (
-              <div className="space-y-2.5 mb-3">
-                {comments.map((c) => (
-                  <div key={c.id} className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                    <div className="flex items-center justify-between text-[11px] mb-1">
-                      <span className="font-bold text-slate-800">{c.author}</span>
-                      <span className="text-slate-400">{c.time}</span>
+            <div className="space-y-2">
+              {currentAssignees.length === 0 ? (
+                <p className="text-[11px] text-slate-400 italic">No assignees yet.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {currentAssignees.map((a) => (
+                    <div
+                      key={a.user_id || a.id}
+                      className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 bg-purple-50 border border-purple-200 text-purple-800 rounded-lg text-[11px] font-medium"
+                    >
+                      <span>{a.name || a.email || a.user?.name || a.user?.email || 'Assignee'}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAssignee(a.user_id || a.id)}
+                        className="p-0.5 text-purple-400 hover:text-rose-600 rounded cursor-pointer"
+                        title="Remove assignee"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
                     </div>
-                    <p className="text-slate-600 leading-normal">{c.text}</p>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
 
-            {/* Add Comment Input */}
-            <form onSubmit={handleAddComment} className="flex items-center gap-2">
-              <input
-                type="text"
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Write a comment or progress update..."
-                className="flex-1 px-3.5 py-2 text-xs rounded-xl border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
-              />
-              <button
-                type="submit"
-                className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center gap-1 transition-colors"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Post</span>
-              </button>
-            </form>
+              {/* Add Assignee Selector */}
+              {projectMembers.length > 0 && (
+                <div className="flex items-center gap-2 pt-1">
+                  <select
+                    value={selectedNewAssignee}
+                    onChange={(e) => setSelectedNewAssignee(e.target.value)}
+                    className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 text-xs focus:outline-none focus:border-purple-600"
+                  >
+                    <option value="">Select project member to assign...</option>
+                    {projectMembers
+                      .filter((m) => !currentAssignees.some((a) => (a.user_id || a.id) === (m.user_id || m.id)))
+                      .map((m) => (
+                        <option key={m.id || m.user_id} value={m.user_id || m.id}>
+                          {m.name || m.user?.name} ({m.email || m.user?.email})
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleAddAssignee}
+                    disabled={!selectedNewAssignee}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-xs transition-colors cursor-pointer disabled:opacity-40"
+                  >
+                    Assign
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
-          <span>Time Logged: <strong className="text-slate-800">{task.timeLogged || '0h'}</strong></span>
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold"
-          >
-            Close
-          </button>
         </div>
       </div>
     </div>
   );
 }
-

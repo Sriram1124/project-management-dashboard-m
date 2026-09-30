@@ -42,12 +42,13 @@ export default function UpcomingDeadlines({ deadlines, onViewAll }) {
   };
 
   // Total count calculation
-  const totalCount = deadlines.reduce((acc, g) => acc + g.items.length, 0);
-  const todayCount = deadlines.find((g) => g.group === 'TODAY')?.items.length || 0;
+  const totalCount = (deadlines || []).reduce((acc, g) => acc + (g?.items?.length || 0), 0);
+  const todayCount = (deadlines || []).find((g) => g?.group === 'TODAY')?.items?.length || 0;
 
   // Filter groups
-  const filteredGroups = deadlines
+  const filteredGroups = (deadlines || [])
     .map((group) => {
+      if (!group) return null;
       if (activeFilter === 'ALL') return group;
       if (activeFilter === 'TODAY' && group.group === 'TODAY') return group;
       if (activeFilter === 'TOMORROW' && group.group === 'TOMORROW') return group;
@@ -195,8 +196,9 @@ export default function UpcomingDeadlines({ deadlines, onViewAll }) {
       <div className="p-5 space-y-6">
         {filteredGroups.length === 0 ? (
           <div className="py-8 text-center text-slate-400 space-y-1">
-            <CheckCircle2 className="w-6 h-6 text-emerald-500 mx-auto" />
-            <p className="text-xs font-medium text-slate-600">No deadlines in this time window</p>
+            <Clock className="w-8 h-8 text-purple-400 mx-auto mb-2" />
+            <p className="text-xs font-bold text-slate-700">No Upcoming Task Deadlines</p>
+            <p className="text-[11px] text-slate-400">Task schedules and milestone deliverables are planned for V2.</p>
           </div>
         ) : (
           filteredGroups.map((group) => {

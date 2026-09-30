@@ -28,6 +28,7 @@ import DynamicFormModal from './components/DynamicFormModal';
 import WorkItemDetailModal from './components/WorkItemDetailModal';
 import CreatePersonalTaskModal from './components/CreatePersonalTaskModal';
 import NotificationsDrawer from './components/NotificationsDrawer';
+import { useAuth } from '../../context/AuthContext';
 
 import { userService } from './services/userService';
 import { projectsService } from './services/projectsService';
@@ -36,9 +37,11 @@ import { formsService } from './services/formsService';
 import { notificationsService } from './services/notificationsService';
 
 export default function InternApp({ onLogout, onSelectProject, onToast }) {
+  const { user: authUser } = useAuth();
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [selectedProjectId, setSelectedProjectId] = useState(null);
-  const [workItems, setWorkItems] = useState(workItemsService.getAllWorkItems());
+  const [workItems, setWorkItems] = useState([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
   const [forms, setForms] = useState(formsService.getAssignedForms());
   const [notifications, setNotifications] = useState(notificationsService.getAllNotifications());
 
@@ -49,30 +52,48 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   const currentUser = userService.getCurrentUser();
+  const displayName = authUser?.name || currentUser.name || 'Intern';
+  const displayRole = authUser?.role || 'Intern';
+  const userAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=7C3AED&color=fff`;
   const unreadCount = notifications.filter((n) => !n.is_read).length;
   const pendingFormsCount = forms.filter((f) => f.submission_status === 'PENDING').length;
 
+  const loadWorkItems = async () => {
+    try {
+      setLoadingTasks(true);
+      const items = await workItemsService.listWorkItems({ assigned_to_me: true });
+      setWorkItems(items || []);
+    } catch (err) {
+      console.error('Failed to load intern work items:', err);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+
   useEffect(() => {
-    const unsubTasks = workItemsService.subscribe(setWorkItems);
+    loadWorkItems();
     const unsubForms = formsService.subscribe(setForms);
     const unsubNotifs = notificationsService.subscribe(setNotifications);
 
     return () => {
-      unsubTasks();
       unsubForms();
       unsubNotifs();
     };
   }, []);
 
-  const handleToggleTask = (taskId) => {
-    workItemsService.toggleComplete(taskId);
-    const item = workItemsService.getWorkItemById(taskId);
-    if (item) {
+  const handleToggleTask = async (taskId) => {
+    const item = workItems.find((w) => w.id === taskId);
+    if (!item) return;
+    try {
+      const updated = await workItemsService.toggleComplete(item);
+      setWorkItems((prev) => prev.map((w) => (w.id === taskId ? updated : w)));
       onToast?.(
-        item.status === 'COMPLETED'
-          ? `Marked "${item.title}" completed!`
-          : `Reopened "${item.title}"`
+        updated.status === 'COMPLETED'
+          ? `Marked "${updated.title}" completed!`
+          : `Reopened "${updated.title}"`
       );
+    } catch (err) {
+      onToast?.(err.message || 'Failed to update task status');
     }
   };
 
@@ -183,16 +204,16 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <img
-                src={currentUser.avatar}
-                alt={currentUser.name}
+                src={userAvatar}
+                alt={displayName}
                 className="w-7 h-7 rounded-md object-cover border border-purple-400/40"
               />
               <div className="flex flex-col leading-tight">
                 <span className="text-xs font-semibold text-white">
-                  {currentUser.name}
+                  {displayName}
                 </span>
                 <span className="text-[10px] text-purple-300/70">
-                  Intern • Section C1
+                  {displayRole}
                 </span>
               </div>
             </div>
@@ -236,7 +257,7 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
 
             {/* Date Display */}
             <div className="pl-3 border-l border-slate-200 text-xs font-medium text-slate-500">
-              Thu, 19 Dec 2025
+              {new Date().toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
             </div>
           </div>
         </header>
@@ -244,27 +265,26 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
         {/* Page Content */}
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
           <div className="max-w-6xl mx-auto space-y-6">
-            {/* Perspective Banner */}
+            {/* Authenticated User Banner */}
             <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-700 to-indigo-700 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold text-sm tracking-wider">
-                  {currentUser.initials || 'AP'}
+                  {(displayName.slice(0, 2) || 'IN').toUpperCase()}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-base font-bold">
-                      {currentUser.name} (Intern Perspective)
+                      {displayName}
                     </h2>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20">
-                      {currentUser.cohort}
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20 uppercase tracking-wider">
+                      {displayRole}
                     </span>
                   </div>
                   <p className="text-xs text-purple-100">
-                    Project: {currentUser.primaryProjectName} • Lead: {currentUser.lead.name}
+                    {authUser?.email || currentUser.email}
                   </p>
                 </div>
               </div>
-
             </div>
 
             {/* Render Tab View */}
@@ -307,6 +327,8 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
             {currentTab === 'tasks' && (
               <MyTasksTab
                 workItems={workItems}
+                loading={loadingTasks}
+                onReload={loadWorkItems}
                 onOpenTaskModal={(t) => setSelectedTask(t)}
                 onOpenCreatePersonalTask={() => setIsCreatePersonalOpen(true)}
                 onToggleTask={handleToggleTask}
@@ -341,6 +363,11 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
         workItem={selectedTask}
         isOpen={Boolean(selectedTask)}
         onClose={() => setSelectedTask(null)}
+        onTaskUpdated={loadWorkItems}
+        onTaskDeleted={() => {
+          setSelectedTask(null);
+          loadWorkItems();
+        }}
         onToast={onToast}
       />
 
@@ -355,7 +382,7 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
       <CreatePersonalTaskModal
         isOpen={isCreatePersonalOpen}
         onClose={() => setIsCreatePersonalOpen(false)}
-        onTaskCreated={() => setWorkItems(workItemsService.getAllWorkItems())}
+        onTaskCreated={() => loadWorkItems()}
         onToast={onToast}
       />
 

@@ -91,8 +91,22 @@ export default function AssignedFormsTab({
       </div>
 
       {/* Forms Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {filtered.map((form) => {
+      {filtered.length === 0 ? (
+        <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 text-slate-400">
+          <FileText className="w-10 h-10 mx-auto mb-3 text-purple-400" />
+          <h4 className="font-bold text-slate-800 text-base">No Forms Available</h4>
+          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
+            Form evaluations, progress surveys, and cohort check-ins are planned for the V2 module.
+          </p>
+          <div className="mt-4">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+              Planned for V2
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filtered.map((form) => {
           const isSubmitted = form.submission_status === 'SUBMITTED';
           const isOverdue = formsService.isOverdue(form);
 
@@ -174,6 +188,7 @@ export default function AssignedFormsTab({
           );
         })}
       </div>
+      )}
     </div>
   );
 }

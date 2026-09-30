@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   ArrowLeft, 
   FolderKanban, 
@@ -13,14 +13,15 @@ import {
   MessageSquare,
   ShieldCheck,
   ChevronRight,
-  Plus,
-  ListTodo
+  ListTodo,
+  FileQuestion,
+  Layers,
+  Sparkles
 } from 'lucide-react';
-import PersonalKanbanBoard from './PersonalKanbanBoard';
-import MySprintSection from './MySprintSection';
-import CreateMeetingNoteModal from './CreateMeetingNoteModal';
-import { workItemsService } from '../services/workItemsService';
-import { momService } from '../services/momService';
+import { useAuth } from '../../../context/AuthContext';
+
+import { projectsService } from '../../../services/projects.service';
+import FilePreviewModal from '../../../components/views/projects/FilePreviewModal';
 
 export default function ScopedProjectView({
   project,
@@ -28,34 +29,59 @@ export default function ScopedProjectView({
   onTaskClick,
   onToast
 }) {
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'work' | 'sprint' | 'kanban' | 'documents' | 'mom'
-  const [allMoMs, setAllMoMs] = useState(momService.getPublishedMoMs());
-  const [isAddMoMOpen, setIsAddMoMOpen] = useState(false);
+  const { user: authUser } = useAuth();
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'documents' | 'work' | 'sprint' | 'kanban' | 'mom'
+  const [previewFile, setPreviewFile] = useState(null);
 
-  useEffect(() => {
-    const unsub = momService.subscribe(setAllMoMs);
-    return () => unsub();
-  }, []);
+  if (!project) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-3">
+        <FolderKanban className="w-8 h-8 text-slate-400 mx-auto" />
+        <h3 className="text-sm font-bold text-slate-800">Project Not Found</h3>
+        <p className="text-xs text-slate-500">The requested project could not be loaded or is no longer accessible.</p>
+        <button
+          onClick={onBack}
+          className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-semibold hover:bg-purple-700 transition-colors"
+        >
+          Back to My Projects
+        </button>
+      </div>
+    );
+  }
 
-  // Filter items in this specific project assigned to the intern
-  const projectTasks = workItemsService.getAllWorkItems().filter(
-    (w) => w.project_id === project.id
-  );
+  const documents = project.documents || [];
+  const members = project.members || [];
+  const ownerName = project.lead?.name || project.owner?.name || 'Project Owner';
 
-  const completedCount = projectTasks.filter((t) => t.status === 'COMPLETED').length;
+  const handleDownloadDoc = async (doc) => {
+    if (!project?.id) return;
+    try {
+      onToast?.(`Downloading ${doc.name}...`);
+      await projectsService.downloadDocument(project.id, doc.id, doc.name);
+    } catch (err) {
+      onToast?.(err?.message || 'Failed to download document');
+    }
+  };
 
-  // Filter meeting notes strictly for this project
-  const projectMoMs = allMoMs.filter(
-    (m) => m.project_id === project.id || m.project?.toLowerCase().includes(project.name.toLowerCase())
-  );
+  const handlePreviewDoc = (doc) => {
+    const ext = (doc.name ? doc.name.split('.').pop().toLowerCase() : (doc.type || 'file'));
+    const isImg = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext);
+    setPreviewFile({
+      id: doc.id,
+      name: doc.name,
+      type: ext,
+      uploadedAt: doc.updated || 'Recently',
+      isImage: isImg,
+    });
+  };
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
-    { id: 'work', label: `My Work (${projectTasks.length})` },
-    { id: 'sprint', label: 'My Sprint' },
-    { id: 'kanban', label: 'Personal Kanban' },
-    { id: 'documents', label: `Project Documents (${project.documents?.length || 0})` },
-    { id: 'mom', label: `Meeting Notes (${projectMoMs.length})` }
+    { id: 'documents', label: `Project Documents (${documents.length})` },
+    { id: 'work', label: 'My Work (Planned for V2)' },
+    { id: 'sprint', label: 'My Sprint (Planned for V2)' },
+    { id: 'kanban', label: 'Personal Kanban (Planned for V2)' },
+    { id: 'mom', label: 'Meeting Notes (Planned for V2)' }
   ];
 
   return (
@@ -77,10 +103,10 @@ export default function ScopedProjectView({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono font-bold text-slate-400">
-                  {project.code}
+                  {project.code || (project.id ? project.id.slice(0, 8).toUpperCase() : 'PROJ')}
                 </span>
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
-                  {project.status}
+                  {project.status || 'ACTIVE'}
                 </span>
               </div>
               <h2 className="text-base font-bold text-slate-900 mt-0.5">
@@ -93,11 +119,11 @@ export default function ScopedProjectView({
           <div className="flex items-center gap-3 text-xs bg-purple-50/70 border border-purple-100 px-3.5 py-1.5 rounded-xl self-start sm:self-auto">
             <div className="flex items-center gap-1.5 text-purple-900 font-semibold">
               <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
-              <span>Tech Lead: {project.lead.name}</span>
+              <span>Project Owner: {ownerName}</span>
             </div>
             <span className="text-purple-300">·</span>
             <span className="text-purple-700 font-medium">
-              Your Role: Contributor ({projectTasks.length} Assigned Items)
+              Role: {authUser?.role || 'Intern'}
             </span>
           </div>
         </div>
@@ -126,369 +152,229 @@ export default function ScopedProjectView({
       {/* Tab 1: Overview */}
       {activeTab === 'overview' && (
         <div className="space-y-4">
-          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-card space-y-4">
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-card space-y-5">
+            {/* Scope */}
             <div>
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-1">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-1.5">
                 Project Scope & Objective
               </h3>
               <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                {project.description}
+                {project.description || 'No description provided.'}
               </p>
             </div>
 
-            {/* My Personal Assignment Summary in this Project */}
-            <div>
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2">
-                What Am I Doing in This Project?
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="p-3.5 bg-purple-50/60 rounded-xl border border-purple-100 text-center">
-                  <span className="text-[10px] font-bold text-purple-700 uppercase block">
-                    My Deliverables
-                  </span>
-                  <span className="text-2xl font-extrabold text-purple-900 mt-0.5 block">
-                    {projectTasks.length}
-                  </span>
-                  <span className="text-[10px] text-purple-600">Assigned Work Items</span>
-                </div>
+            {/* Project Details Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                  Project Owner
+                </span>
+                <span className="text-sm font-bold text-slate-800 mt-1 block">
+                  {ownerName}
+                </span>
+                <span className="text-[10px] text-slate-500">Project Lead</span>
+              </div>
 
-                <div className="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-100 text-center">
-                  <span className="text-[10px] font-bold text-emerald-700 uppercase block">
-                    Delivered
-                  </span>
-                  <span className="text-2xl font-extrabold text-emerald-900 mt-0.5 block">
-                    {completedCount}
-                  </span>
-                  <span className="text-[10px] text-emerald-600">Completed Tickets</span>
-                </div>
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                  Timeline
+                </span>
+                <span className="text-sm font-bold text-slate-800 mt-1 block">
+                  {project.startDate || 'TBD'} - {project.endDate || 'TBD'}
+                </span>
+                <span className="text-[10px] text-slate-500">Scheduled Duration</span>
+              </div>
 
-                <div className="p-3.5 bg-amber-50/60 rounded-xl border border-amber-100 text-center">
-                  <span className="text-[10px] font-bold text-amber-700 uppercase block">
-                    Pending
-                  </span>
-                  <span className="text-2xl font-extrabold text-amber-900 mt-0.5 block">
-                    {projectTasks.length - completedCount}
-                  </span>
-                  <span className="text-[10px] text-amber-600">Active Sprint Tasks</span>
-                </div>
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                  Assigned Team
+                </span>
+                <span className="text-sm font-bold text-slate-800 mt-1 block">
+                  {members.length} {members.length === 1 ? 'Member' : 'Members'}
+                </span>
+                <span className="text-[10px] text-slate-500">Active Collaborators</span>
               </div>
             </div>
 
-            {/* Recent Project Activity relevant to intern */}
+            {/* Team Members List */}
             <div>
               <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2">
-                Recent Project Milestones & Updates
+                Project Team Members ({members.length})
               </h3>
-              <div className="space-y-2 text-xs">
-                {project.recentActivity?.map((act) => (
-                  <div
-                    key={act.id}
-                    className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between"
-                  >
-                    <span className="text-slate-700 font-medium">{act.text}</span>
-                    <span className="text-[10px] text-slate-400">{act.time}</span>
-                  </div>
-                ))}
-              </div>
+              {members.length === 0 ? (
+                <div className="p-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-500">
+                  No other members currently assigned to this project.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                  {members.map((m) => (
+                    <div
+                      key={m.id}
+                      className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center gap-2.5"
+                    >
+                      <img
+                        src={m.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}&background=random`}
+                        alt={m.name}
+                        className="w-7 h-7 rounded-full object-cover border border-slate-200"
+                      />
+                      <div className="min-w-0">
+                        <span className="text-xs font-bold text-slate-800 block truncate">
+                          {m.name}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block truncate">
+                          {m.email || 'Team Member'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Tab 2: My Work */}
-      {activeTab === 'work' && (
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-card space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-              My Work Items in {project.name}
-            </h3>
-            <span className="text-xs text-slate-400">Click ticket to view details</span>
-          </div>
-
-          <div className="space-y-2">
-            {projectTasks.map((t) => (
-              <div
-                key={t.id}
-                onClick={() => onTaskClick?.(t)}
-                className="p-3 rounded-xl border border-slate-200 hover:border-purple-300 transition-colors cursor-pointer flex items-center justify-between"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="text-[10px] font-mono font-bold text-slate-400">
-                    {t.id}
-                  </span>
-                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-slate-100 text-slate-700">
-                    {t.type}
-                  </span>
-                  <h4 className="text-xs font-bold text-slate-800 truncate">
-                    {t.title}
-                  </h4>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[10px] text-slate-400">
-                    Due {new Date(t.due_date).toLocaleDateString()}
-                  </span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800">
-                    {t.status.replace('_', ' ')}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Tab 3: My Sprint */}
-      {activeTab === 'sprint' && (
-        <MySprintSection
-          workItems={projectTasks}
-          onTaskClick={onTaskClick}
-          onToggleTask={(id) => {
-            workItemsService.toggleComplete(id);
-            onToast?.('Updated task status');
-          }}
-        />
-      )}
-
-      {/* Tab 4: Kanban Board */}
-      {activeTab === 'kanban' && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-500 pb-1">
-            <span>Scoped Personal Kanban: {project.name}</span>
-            <span>Drag cards to update your deliverable status</span>
-          </div>
-          <PersonalKanbanBoard
-            workItems={projectTasks}
-            onTaskClick={onTaskClick}
-            onToast={onToast}
-          />
-        </div>
-      )}
-
-      {/* Tab 5: Documents (Project Documents strictly separate from Task Attachments) */}
+      {/* Tab 2: Project Documents */}
       {activeTab === 'documents' && (
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-card space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                Official Project Specifications & Resources
+                Official Project Specifications & Documents
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Centralized project documentation separate from individual task attachments
+                Centralized project documentation uploaded and managed for this project
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {project.documents?.map((doc) => (
-              <div
-                key={doc.id}
-                className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between hover:border-purple-200 transition-colors"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs shrink-0">
-                    PDF
-                  </div>
-                  <div className="min-w-0">
-                    <span className="font-bold text-slate-800 text-xs block truncate">
-                      {doc.name}
-                    </span>
-                    <span className="text-[10px] text-slate-400">
-                      {doc.size} • Updated {doc.updated}
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => onToast?.(`Downloading ${doc.name}...`)}
-                  className="px-2.5 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 rounded-lg transition-colors shrink-0"
-                >
-                  Download
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Tab 6: Meeting Notes (Separately isolated for this project) */}
-      {activeTab === 'mom' && (
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-card space-y-5">
-          {/* Header with Project Title & Add Meeting Note Button */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded">
-                  {project.code}
-                </span>
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Project Meeting Notes ({projectMoMs.length})
-                </span>
-              </div>
-              <h3 className="text-base font-bold text-slate-900 mt-1">
-                Meeting Records: {project.name}
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Meeting minutes, architecture syncs, and agreed action items recorded specifically for {project.name}
+          {documents.length === 0 ? (
+            <div className="py-12 text-center border border-dashed border-slate-200 rounded-2xl space-y-2">
+              <FileQuestion className="w-8 h-8 text-slate-300 mx-auto" />
+              <h4 className="text-sm font-bold text-slate-700">No project documents yet</h4>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                Documents uploaded to this project will appear here for all team members.
               </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsAddMoMOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95 self-start sm:self-auto"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Meeting Note</span>
-            </button>
-          </div>
-
-          {/* Project-specific MoM List */}
-          {projectMoMs.length === 0 ? (
-            <div className="py-12 text-center border border-dashed border-slate-200 rounded-2xl space-y-3">
-              <MessageSquare className="w-8 h-8 text-slate-300 mx-auto" />
-              <div>
-                <h4 className="text-sm font-bold text-slate-700">No meeting notes recorded yet for {project.name}</h4>
-                <p className="text-xs text-slate-400 mt-0.5">Create your first meeting note to keep track of decisions and assigned actions.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAddMoMOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 text-white text-xs font-bold shadow-xs hover:bg-purple-700 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add First Meeting Note</span>
-              </button>
             </div>
           ) : (
-            <div className="space-y-4">
-              {projectMoMs.map((m) => (
-                <div
-                  key={m.id}
-                  className="p-5 bg-slate-50/70 border border-slate-200 rounded-2xl space-y-3.5 hover:border-purple-200 transition-colors"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono font-bold text-slate-400">
-                          {m.id}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {documents.map((doc) => {
+                const ext = (doc.name.split('.').pop() || 'FILE').toUpperCase();
+                return (
+                  <div
+                    key={doc.id}
+                    onClick={() => handlePreviewDoc(doc)}
+                    className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between hover:border-purple-200 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-[10px] shrink-0">
+                        {ext}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="font-bold text-slate-800 text-xs block truncate" title={doc.name}>
+                          {doc.name}
                         </span>
-                        <span className="text-[10px] font-bold text-purple-700 bg-purple-100/70 px-2 py-0.2 rounded">
-                          {m.project_code || project.code}
+                        <span className="text-[10px] text-slate-400">
+                          Uploaded {doc.updated || 'Recently'}
                         </span>
                       </div>
-                      <h4 className="text-sm font-bold text-slate-900 mt-1">
-                        {m.title}
-                      </h4>
                     </div>
 
-                    <div className="flex items-center gap-3 text-xs text-slate-500">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        {m.date}
-                      </span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        {m.time}
-                      </span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1">
-                        <Users className="w-3.5 h-3.5 text-slate-400" />
-                        {m.attendees} attendees
-                      </span>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownloadDoc(doc);
+                      }}
+                      className="px-2.5 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 rounded-lg transition-colors shrink-0 cursor-pointer"
+                    >
+                      Download
+                    </button>
                   </div>
-
-                  {/* Summary */}
-                  <div>
-                    <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                      Summary & Discussion
-                    </h5>
-                    <p className="text-xs text-slate-700 leading-relaxed bg-white p-3 rounded-xl border border-slate-200/80">
-                      {m.summary}
-                    </p>
-                  </div>
-
-                  {/* Decisions */}
-                  {m.decisions?.length > 0 && (
-                    <div>
-                      <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                        Key Decisions ({m.decisions.length})
-                      </h5>
-                      <ul className="space-y-1.5 text-xs">
-                        {m.decisions.map((dec, i) => (
-                          <li
-                            key={i}
-                            className="flex items-start gap-2 p-2 rounded-lg bg-purple-50/50 border border-purple-100 text-slate-800"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
-                            <span>{dec}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Action Items */}
-                  {m.actionItems?.length > 0 && (
-                    <div>
-                      <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1">
-                        <ListTodo className="w-3.5 h-3.5 text-purple-600" />
-                        <span>Action Items ({m.actionItems.length})</span>
-                      </h5>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        {m.actionItems.map((act) => (
-                          <div
-                            key={act.id}
-                            className={`p-2.5 rounded-xl border flex items-center justify-between ${
-                              act.isCurrentUser
-                                ? 'bg-purple-50/70 border-purple-200'
-                                : 'bg-white border-slate-200'
-                            }`}
-                          >
-                            <div className="min-w-0 pr-2">
-                              <span className="font-semibold text-slate-800 block truncate">
-                                {act.text}
-                              </span>
-                              <span className="text-[10px] text-slate-500">
-                                {act.assignee} • Due {act.due}
-                              </span>
-                            </div>
-                            <span
-                              className={`text-[9px] font-bold px-2 py-0.5 rounded shrink-0 ${
-                                act.status === 'Completed'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-amber-100 text-amber-800'
-                              }`}
-                            >
-                              {act.status}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="text-[10px] text-slate-400 pt-1">
-                    Recorded by: <span className="font-medium text-slate-600">{m.organizer}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
-      {/* Modal: Add Meeting Note strictly for this project */}
-      <CreateMeetingNoteModal
-        isOpen={isAddMoMOpen}
-        onClose={() => setIsAddMoMOpen(false)}
-        preselectedProjectId={project.id}
-        onSuccess={() => setAllMoMs(momService.getPublishedMoMs())}
-        onToast={onToast}
-      />
+      {/* Preview Modal */}
+      {previewFile && (
+        <FilePreviewModal
+          file={previewFile}
+          projectId={project.id}
+          onClose={() => setPreviewFile(null)}
+          onDownload={(f) => handleDownloadDoc(f)}
+        />
+      )}
+
+      {/* Tab 3: My Work (V2 Placeholder) */}
+      {activeTab === 'work' && (
+        <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-card text-center space-y-3">
+          <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mx-auto">
+            <CheckSquare className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-slate-800">My Work Items — Planned for V2</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+            Individual task assignment, story point estimation, and deliverable ticket tracking will be enabled in Phase 2 of the Project Management platform.
+          </p>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-[11px] font-semibold">
+            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+            <span>Work Items Module Scheduled for V2</span>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: My Sprint (V2 Placeholder) */}
+      {activeTab === 'sprint' && (
+        <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-card text-center space-y-3">
+          <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto">
+            <Zap className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-slate-800">Sprint Management — Planned for V2</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+            Active sprint iteration tracking, burn-down velocity, and sprint retrospective deliverables will be available in V2.
+          </p>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-[11px] font-semibold">
+            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Sprint Cycles Scheduled for V2</span>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 5: Personal Kanban (V2 Placeholder) */}
+      {activeTab === 'kanban' && (
+        <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-card text-center space-y-3">
+          <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto">
+            <Layers className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-slate-800">Personal Kanban Board — Planned for V2</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+            Drag-and-drop interactive kanban columns and real-time state synchronization will be introduced in V2.
+          </p>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-[11px] font-semibold">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Kanban Board Scheduled for V2</span>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 6: Meeting Notes (V2 Placeholder) */}
+      {activeTab === 'mom' && (
+        <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-card text-center space-y-3">
+          <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
+            <MessageSquare className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-slate-800">Meeting Notes (MoM) — Planned for V2</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+            Recording meeting minutes, AI transcription summaries, attendee check-ins, and actionable decision items are scheduled for V2.
+          </p>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-[11px] font-semibold">
+            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+            <span>Minutes of Meeting Module Scheduled for V2</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

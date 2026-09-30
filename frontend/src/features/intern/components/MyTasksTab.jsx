@@ -12,7 +12,8 @@ import {
   Users,
   LayoutGrid,
   List,
-  GitFork
+  GitFork,
+  Loader2
 } from 'lucide-react';
 import PersonalKanbanBoard from './PersonalKanbanBoard';
 import HierarchyTreeView from './HierarchyTreeView';
@@ -20,6 +21,8 @@ import { workItemsService } from '../services/workItemsService';
 
 export default function MyTasksTab({
   workItems = [],
+  loading = false,
+  onReload,
   onOpenTaskModal,
   onOpenCreatePersonalTask,
   onToggleTask,
@@ -31,11 +34,11 @@ export default function MyTasksTab({
 
   // Filtering
   const filteredItems = workItems.filter((item) => {
-    // Search
+    const projectName = item.project?.name || item.project_name || '';
     const matchSearch =
-      item.title.toLowerCase().includes(search.toLowerCase()) ||
-      item.id.toLowerCase().includes(search.toLowerCase()) ||
-      (item.project_name && item.project_name.toLowerCase().includes(search.toLowerCase()));
+      (item.title && item.title.toLowerCase().includes(search.toLowerCase())) ||
+      (item.id && item.id.toLowerCase().includes(search.toLowerCase())) ||
+      projectName.toLowerCase().includes(search.toLowerCase());
 
     if (!matchSearch) return false;
 
@@ -198,170 +201,201 @@ export default function MyTasksTab({
         </div>
       </div>
 
-      {/* VIEW 1: BOARD (Personal Kanban) */}
-      {viewMode === 'board' && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-500 pb-1">
-            <span>Personal Kanban Board (Showing your {filteredItems.length} active tickets)</span>
-            <span>Drag cards between columns to update status</span>
-          </div>
-          <PersonalKanbanBoard
-            workItems={filteredItems}
-            onTaskClick={onOpenTaskModal}
-            onToast={onToast}
-          />
+      {loading ? (
+        <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 text-slate-500">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-purple-600" />
+          <h4 className="font-bold text-slate-800 text-sm">Loading your work items...</h4>
         </div>
-      )}
-
-      {/* VIEW 2: HIERARCHY TREE */}
-      {viewMode === 'hierarchy' && (
-        <HierarchyTreeView
-          workItems={filteredItems}
-          onTaskClick={onOpenTaskModal}
-          onToggleTask={onToggleTask}
-        />
-      )}
-
-      {/* VIEW 3: LIST VIEW */}
-      {viewMode === 'list' && (
-        filteredItems.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 text-slate-400">
-            <CheckSquare className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-            <h4 className="font-bold text-slate-700 text-sm">No tasks found</h4>
-            <p className="text-xs text-slate-500 mt-1">
-              {search
-                ? 'No work items match your search filters.'
-                : 'You have no tasks in this category.'}
-            </p>
+      ) : workItems.length === 0 ? (
+        <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 text-slate-400">
+          <CheckSquare className="w-10 h-10 mx-auto mb-3 text-purple-400" />
+          <h4 className="font-bold text-slate-800 text-base">No Tasks Assigned Yet</h4>
+          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
+            You currently have no tasks assigned to you across your projects. You can also create personal tasks and learning goals.
+          </p>
+          <div className="mt-4">
+            <button
+              onClick={onOpenCreatePersonalTask}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create Personal Task</span>
+            </button>
           </div>
-        ) : (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-card divide-y divide-slate-100 overflow-hidden">
-            {filteredItems.map((item) => {
-              const isOverdue = workItemsService.isOverdue(item);
-              const isCompleted = item.status === 'COMPLETED';
-              const isPersonal = item.project_id === null;
-              const hasMultipleAssignees = (item.work_item_assignees?.length || 0) > 1;
+        </div>
+      ) : (
+        <>
+          {/* VIEW 1: BOARD (Personal Kanban) */}
+          {viewMode === 'board' && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-500 pb-1">
+                <span>Personal Kanban Board (Showing your {filteredItems.length} active tickets)</span>
+                <span>Drag cards between columns to update status</span>
+              </div>
+              <PersonalKanbanBoard
+                workItems={filteredItems}
+                onTaskClick={onOpenTaskModal}
+                onTaskUpdated={onReload}
+                onToast={onToast}
+              />
+            </div>
+          )}
 
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => onOpenTaskModal?.(item)}
-                  className={`p-4 flex items-center justify-between transition-colors cursor-pointer hover:bg-slate-50 select-none ${
-                    isOverdue ? 'bg-rose-50/20' : ''
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0 pr-3">
-                    {/* Complete checkbox */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleTask?.(item.id);
-                      }}
-                      className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0 ${
-                        isCompleted
-                          ? 'bg-emerald-600 border-emerald-600 text-white'
-                          : 'border-slate-300 hover:border-purple-500 bg-white'
+          {/* VIEW 2: HIERARCHY TREE */}
+          {viewMode === 'hierarchy' && (
+            <HierarchyTreeView
+              workItems={filteredItems}
+              onTaskClick={onOpenTaskModal}
+              onToggleTask={onToggleTask}
+            />
+          )}
+
+          {/* VIEW 3: LIST VIEW */}
+          {viewMode === 'list' && (
+            filteredItems.length === 0 ? (
+              <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 text-slate-400">
+                <CheckSquare className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                <h4 className="font-bold text-slate-700 text-sm">No tasks found</h4>
+                <p className="text-xs text-slate-500 mt-1">
+                  {search
+                    ? 'No work items match your search filters.'
+                    : 'You have no tasks in this category.'}
+                </p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-card divide-y divide-slate-100 overflow-hidden">
+                {filteredItems.map((item) => {
+                  const isOverdue = workItemsService.isOverdue(item);
+                  const isCompleted = item.status === 'COMPLETED';
+                  const isPersonal = item.project_id === null;
+                  const assigneesList = item.assignees || item.work_item_assignees || [];
+                  const hasMultipleAssignees = assigneesList.length > 1;
+                  const projectName = item.project?.name || item.project_name || (isPersonal ? 'Personal Goal' : 'Project Task');
+
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => onOpenTaskModal?.(item)}
+                      className={`p-4 flex items-center justify-between transition-colors cursor-pointer hover:bg-slate-50 select-none ${
+                        isOverdue ? 'bg-rose-50/20' : ''
                       }`}
                     >
-                      {isCompleted && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                    </button>
-
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono font-bold text-slate-400">
-                          {item.id}
-                        </span>
-                        <span
-                          className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded border ${getTypeStyle(
-                            item.type
-                          )}`}
-                        >
-                          {item.type}
-                        </span>
-                        {isPersonal && (
-                          <span className="text-[9px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded">
-                            Personal
-                          </span>
-                        )}
-                        <h4
-                          className={`text-xs font-bold truncate ${
+                      <div className="flex items-center gap-3 min-w-0 pr-3">
+                        {/* Complete checkbox */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleTask?.(item.id);
+                          }}
+                          className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0 ${
                             isCompleted
-                              ? 'line-through text-slate-400'
-                              : 'text-slate-800'
+                              ? 'bg-emerald-600 border-emerald-600 text-white'
+                              : 'border-slate-300 hover:border-purple-500 bg-white'
                           }`}
                         >
-                          {item.title}
-                        </h4>
+                          {isCompleted && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        </button>
+
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono font-bold text-slate-400">
+                              {item.id}
+                            </span>
+                            <span
+                              className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded border ${getTypeStyle(
+                                item.type
+                              )}`}
+                            >
+                              {item.type}
+                            </span>
+                            {isPersonal && (
+                              <span className="text-[9px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded">
+                                Personal
+                              </span>
+                            )}
+                            <h4
+                              className={`text-xs font-bold truncate ${
+                                isCompleted
+                                  ? 'line-through text-slate-400'
+                                  : 'text-slate-800'
+                              }`}
+                            >
+                              {item.title}
+                            </h4>
+                          </div>
+
+                          <div className="flex items-center gap-2.5 text-[11px] text-slate-400 mt-1">
+                            <span className="text-slate-600 font-medium">
+                              {projectName}
+                            </span>
+                            <span>•</span>
+                            <span
+                              className={
+                                isOverdue
+                                  ? 'text-rose-600 font-bold'
+                                  : workItemsService.isDueToday(item)
+                                  ? 'text-amber-600 font-bold'
+                                  : ''
+                              }
+                            >
+                              {isOverdue
+                                ? '⚠️ Overdue'
+                                : workItemsService.isDueToday(item)
+                                ? 'Due Today'
+                                : item.due_date
+                                ? `Due ${new Date(item.due_date).toLocaleDateString()}`
+                                : 'No due date'}
+                            </span>
+
+                            {hasMultipleAssignees && (
+                              <>
+                                <span>•</span>
+                                <span className="text-purple-600 font-medium flex items-center gap-1">
+                                  <Users className="w-3 h-3" />
+                                  <span>{assigneesList.length} assignees</span>
+                                </span>
+                              </>
+                            )}
+
+                            {item.attachments?.length > 0 && (
+                              <>
+                                <span>•</span>
+                                <span className="text-slate-500">
+                                  📎 {item.attachments.length} files
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2.5 text-[11px] text-slate-400 mt-1">
-                        <span className="text-slate-600 font-medium">
-                          {item.project_name || 'Personal Goal'}
-                        </span>
-                        <span>•</span>
+                      <div className="flex items-center gap-2.5 shrink-0">
                         <span
-                          className={
-                            isOverdue
-                              ? 'text-rose-600 font-bold'
-                              : workItemsService.isDueToday(item)
-                              ? 'text-amber-600 font-bold'
-                              : ''
-                          }
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            item.priority === 'URGENT' || item.priority === 'HIGH'
+                              ? 'text-amber-700 bg-amber-50 border border-amber-200'
+                              : 'text-slate-600 bg-slate-100'
+                          }`}
                         >
-                          {isOverdue
-                            ? '⚠️ Overdue'
-                            : workItemsService.isDueToday(item)
-                            ? 'Due Today'
-                            : `Due ${new Date(item.due_date).toLocaleDateString()}`}
+                          {item.priority}
                         </span>
 
-                        {hasMultipleAssignees && (
-                          <>
-                            <span>•</span>
-                            <span className="text-purple-600 font-medium flex items-center gap-1">
-                              <Users className="w-3 h-3" />
-                              <span>{item.work_item_assignees.length} assignees (You + {item.work_item_assignees.length - 1})</span>
-                            </span>
-                          </>
-                        )}
-
-                        {item.attachments?.length > 0 && (
-                          <>
-                            <span>•</span>
-                            <span className="text-slate-500">
-                              📎 {item.attachments.length} files
-                            </span>
-                          </>
-                        )}
+                        <span
+                          className={`px-2.5 py-1 rounded-md text-[10px] font-bold ${getStatusBadge(
+                            item.status
+                          )}`}
+                        >
+                          {item.status.replace('_', ' ')}
+                        </span>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        item.priority === 'URGENT' || item.priority === 'HIGH'
-                          ? 'text-amber-700 bg-amber-50 border border-amber-200'
-                          : 'text-slate-600 bg-slate-100'
-                      }`}
-                    >
-                      {item.priority}
-                    </span>
-
-                    <span
-                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold ${getStatusBadge(
-                        item.status
-                      )}`}
-                    >
-                      {item.status.replace('_', ' ')}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )
+                  );
+                })}
+              </div>
+            )
+          )}
+        </>
       )}
     </div>
   );

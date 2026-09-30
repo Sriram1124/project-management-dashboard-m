@@ -126,8 +126,17 @@ export default function InternAttendanceTab({ onToast }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {records.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50/70 transition-colors">
+              {records.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="py-12 text-center text-slate-400">
+                    <CalendarCheck className="w-8 h-8 text-purple-400 mx-auto mb-2" />
+                    <p className="font-bold text-slate-700 text-sm">No Attendance Records Yet</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Automated session check-ins and timesheets are planned for V2.</p>
+                  </td>
+                </tr>
+              ) : (
+                records.map((r) => (
+                  <tr key={r.id} className="hover:bg-slate-50/70 transition-colors">
                   <td className="py-3.5 px-4 font-bold text-slate-800">
                     {r.date}
                   </td>
@@ -150,7 +159,7 @@ export default function InternAttendanceTab({ onToast }) {
                     </span>
                   </td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
         </div>

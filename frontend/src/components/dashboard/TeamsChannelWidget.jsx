@@ -72,8 +72,17 @@ export default function TeamsChannelWidget({
       </div>
 
       {/* Forms Grid */}
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3.5">
-        {activeForms.map((form) => {
+      {activeForms.length === 0 ? (
+        <div className="mt-4 p-8 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 text-xs">
+          <FileText className="w-8 h-8 text-purple-400 mx-auto mb-2" />
+          <h4 className="font-bold text-slate-700 text-sm">No Active Channel Forms</h4>
+          <p className="text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
+            Channel form broadcasts and response collections are planned for V2.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {activeForms.map((form) => {
           const completionPercent = Math.round((form.submittedCount / form.totalTarget) * 100);
 
           return (
@@ -138,6 +147,7 @@ export default function TeamsChannelWidget({
           );
         })}
       </div>
+      )}
 
       {/* Modals */}
       <PostFormModal
