@@ -375,7 +375,7 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
         form={selectedForm}
         isOpen={Boolean(selectedForm)}
         onClose={() => setSelectedForm(null)}
-        onSubmitSuccess={() => setForms(formsService.getAssignedForms())}
+        onSubmitSuccess={async () => setForms(await formsService.getForms())}
         onToast={onToast}
       />
 

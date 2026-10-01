@@ -67,7 +67,7 @@ export default function DynamicFormModal({
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -92,18 +92,25 @@ export default function DynamicFormModal({
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      try {
-        formsService.submitForm(form.id, answers);
-        setIsSubmitting(false);
-        onToast?.(`Form "${form.title}" submitted successfully!`);
-        onSubmitSuccess?.(form.id);
-        onClose();
-      } catch (err) {
-        setIsSubmitting(false);
-        setErrorMsg(err.message || 'Error submitting form');
-      }
-    }, 500);
+    try {
+      const formattedAnswers = Object.entries(answers).map(([qId, val]) => {
+        const q = form.questions.find(x => x.id === qId);
+        let ans = { question_id: qId };
+        if (q.type === 'NUMBER') ans.value_number = Number(val);
+        else if (q.type === 'MULTI_SELECT') ans.value_array = Array.isArray(val) ? val : [val];
+        else if (q.type === 'BOOLEAN') ans.value_boolean = Boolean(val);
+        else ans.value_string = String(val);
+        return ans;
+      });
+      await formsService.submitForm(form.id, formattedAnswers);
+      setIsSubmitting(false);
+      onToast?.(`Form "${form.title}" submitted successfully!`);
+      onSubmitSuccess?.(form.id);
+      onClose();
+    } catch (err) {
+      setIsSubmitting(false);
+      setErrorMsg(err.message || 'Error submitting form');
+    }
   };
 
   // Render question field dynamically based on type
