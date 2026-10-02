@@ -22,9 +22,12 @@ import {
 import PostFormModal from './PostFormModal';
 import FillFormModal from './FillFormModal';
 import ViewSubmissionsModal from './ViewSubmissionsModal';
+import { formsService } from '../../services/forms.service';
+import CreateFormModal from '../modals/CreateFormModal';
+import FormBuilderDrawer from '../modals/FormBuilderDrawer';
+import ViewSubmissionsDrawer from '../modals/ViewSubmissionsDrawer';
 
 export default function TeamsChannelView({ 
-  forms, 
   onPostForm, 
   onSubmitResponse, 
   onToast 
@@ -32,9 +35,24 @@ export default function TeamsChannelView({
   const [activeChannel, setActiveChannel] = useState('forms-and-surveys');
   const [filterTab, setFilterTab] = useState('all'); // 'all' | 'active' | 'completed'
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
-  const [selectedFormForFill, setSelectedFormForFill] = useState(null);
+  
+  const [forms, setForms] = useState([]);
   const [selectedFormForView, setSelectedFormForView] = useState(null);
+  const [selectedFormBuilder, setSelectedFormBuilder] = useState(null);
   const [chatMessage, setChatMessage] = useState('');
+
+  const loadForms = async () => {
+    try {
+      const data = await formsService.getForms();
+      setForms(data);
+    } catch (e) {
+      console.error('Failed to load forms');
+    }
+  };
+
+  React.useEffect(() => {
+    loadForms();
+  }, []);
 
   const channelsList = [
     { id: 'forms-and-surveys', name: 'forms-and-surveys', count: forms.length, isPrimary: true },
@@ -44,8 +62,8 @@ export default function TeamsChannelView({
   ];
 
   const filteredForms = forms.filter((f) => {
-    if (filterTab === 'active') return f.status === 'Active';
-    if (filterTab === 'completed') return f.status === 'Completed';
+    if (filterTab === 'active') return f.status === 'PUBLISHED';
+    if (filterTab === 'completed') return f.status === 'ARCHIVED';
     return true;
   });
 
@@ -215,7 +233,7 @@ export default function TeamsChannelView({
 
           {/* Form Stream */}
           {filteredForms.map((form) => {
-            const completionPercent = Math.round((form.submittedCount / form.totalTarget) * 100);
+            const completionPercent = Math.round((form._count?.submissions || 0 / form.totalTarget) * 100);
 
             return (
               <div 
@@ -226,15 +244,15 @@ export default function TeamsChannelView({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <img
-                      src={form.author.avatar}
-                      alt={form.author.name}
+                      src={(form.creator||{name:'Manager',role:'Admin',avatar:'https://ui-avatars.com/api/?name=Manager'}).avatar}
+                      alt={(form.creator||{name:'Manager',role:'Admin',avatar:'https://ui-avatars.com/api/?name=Manager'}).name}
                       className="w-9 h-9 rounded-full object-cover ring-2 ring-purple-100"
                     />
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-900">{form.author.name}</span>
+                        <span className="text-xs font-bold text-slate-900">{(form.creator||{name:'Manager',role:'Admin',avatar:'https://ui-avatars.com/api/?name=Manager'}).name}</span>
                         <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-100 text-purple-700">
-                          {form.author.role}
+                          {(form.creator||{name:'Manager',role:'Admin',avatar:'https://ui-avatars.com/api/?name=Manager'}).role}
                         </span>
                         {form.pinned && (
                           <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-600">
@@ -292,7 +310,7 @@ export default function TeamsChannelView({
                     <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1.5">
                       <span>Cohort Submissions</span>
                       <span className="text-purple-700 font-bold">
-                        {form.submittedCount} / {form.totalTarget} Submitted ({completionPercent}%)
+                        {form._count?.submissions || 0} / {form.totalTarget} Submitted ({completionPercent}%)
                       </span>
                     </div>
                     <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
@@ -308,25 +326,45 @@ export default function TeamsChannelView({
                   {/* Action Buttons for Everyone */}
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setSelectedFormForFill(form)}
-                        className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>Fill &amp; Submit Form</span>
-                      </button>
+                      {form.status === 'DRAFT' && (
+                        <>
+                          <button
+                            onClick={() => setSelectedFormBuilder(form)}
+                            className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>Build Form</span>
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await formsService.publishForm(form.id);
+                                onToast?.('Form published successfully');
+                                loadForms();
+                              } catch (e) {
+                                onToast?.('Failed to publish form');
+                              }
+                            }}
+                            className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                          >
+                            <span>Publish Form</span>
+                          </button>
+                        </>
+                      )}
 
-                      <button
-                        onClick={() => setSelectedFormForView(form)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 flex items-center gap-1.5 transition-colors shadow-2xs"
-                      >
-                        <Users className="w-3.5 h-3.5" />
-                        <span>View Submissions ({form.submittedCount})</span>
-                      </button>
+                      {form.status !== 'DRAFT' && (
+                        <button
+                          onClick={() => setSelectedFormForView(form)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 flex items-center gap-1.5 transition-colors shadow-2xs"
+                        >
+                          <Users className="w-3.5 h-3.5" />
+                          <span>View Submissions ({form._count?.submissions || 0})</span>
+                        </button>
+                      )}
                     </div>
 
                     <div className="text-[11px] text-slate-400">
-                      {form.questions?.length || 3} Questions • Instant confirmation
+                      {form.status} ? Instant confirmation
                     </div>
                   </div>
                 </div>
@@ -368,31 +406,31 @@ export default function TeamsChannelView({
       </div>
 
       {/* Modals */}
-      <PostFormModal
-        isOpen={isPostModalOpen}
-        onClose={() => setIsPostModalOpen(false)}
-        onPostForm={(newForm) => {
-          onPostForm(newForm);
-          onToast?.(`Form "${newForm.title}" posted to #forms-and-surveys`);
-        }}
-      />
+      {isPostModalOpen && (
+        <CreateFormModal
+          onClose={() => setIsPostModalOpen(false)}
+          onSuccess={() => {
+            setIsPostModalOpen(false);
+            loadForms();
+            onToast?.('New form created successfully.');
+          }}
+        />
+      )}
 
-      <FillFormModal
-        isOpen={Boolean(selectedFormForFill)}
-        form={selectedFormForFill}
-        onClose={() => setSelectedFormForFill(null)}
-        onSubmitResponse={(response) => {
-          onSubmitResponse(response);
-          onToast?.('Form response submitted successfully!');
-        }}
-      />
+      {selectedFormBuilder && (
+        <FormBuilderDrawer
+          form={selectedFormBuilder}
+          onClose={() => setSelectedFormBuilder(null)}
+          onUpdate={loadForms}
+        />
+      )}
 
-      <ViewSubmissionsModal
-        isOpen={Boolean(selectedFormForView)}
-        form={selectedFormForView}
-        onClose={() => setSelectedFormForView(null)}
-        onRemindPending={handleRemindPending}
-      />
+      {selectedFormForView && (
+        <ViewSubmissionsDrawer
+          formId={selectedFormForView.id}
+          onClose={() => setSelectedFormForView(null)}
+        />
+      )}
     </div>
   );
 }

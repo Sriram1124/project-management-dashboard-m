@@ -69,4 +69,7 @@ frontend/.env
 login_frontend/
 intern_dashboard/
 reference_dir/
+test_*.js
 
+
+test_*.js

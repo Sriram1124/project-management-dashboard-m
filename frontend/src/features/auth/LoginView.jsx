@@ -31,7 +31,7 @@ export default function LoginView() {
       if (err.message.toLowerCase().includes('failed to fetch') || err.message.toLowerCase().includes('network error')) {
         setError('Cannot connect to the server. Please try again.');
       } else {
-        setError('Invalid email or password. Please verify your credentials and try again.');
+        setError('Error: ' + err.message);
       }
     } finally {
       setIsLoading(false);
