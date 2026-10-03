@@ -7,7 +7,7 @@ async function main() {
   console.log('Seeding roles and permissions...');
 
   // 1. Create Roles
-  const roles = ['ADMIN', 'MANAGER', 'INTERN', 'TECH_LEAD'];
+  const roles = ['ADMIN', 'MANAGER', 'INTERN', 'TECH_LEAD', 'SUPER_ADMIN'];
   for (const roleName of roles) {
     await prisma.role.upsert({
       where: { name: roleName },
@@ -23,7 +23,8 @@ async function main() {
     'TASK_READ', 'TASK_CREATE', 'TASK_UPDATE', 'TASK_DELETE', 'TASK_ASSIGN',
     'FORM_READ', 'FORM_CREATE', 'FORM_UPDATE', 'FORM_DELETE', 'FORM_SUBMIT',
     'ATTENDANCE_READ', 'ATTENDANCE_CREATE', 'ATTENDANCE_UPDATE',
-    'EVALUATION_READ', 'EVALUATION_CREATE', 'EVALUATION_UPDATE'
+    'EVALUATION_READ', 'EVALUATION_CREATE', 'EVALUATION_UPDATE',
+    'ORGANIZATION_READ', 'ORGANIZATION_CREATE', 'ORGANIZATION_UPDATE', 'ORGANIZATION_DELETE'
   ];
 
   for (const permName of permissions) {
@@ -37,6 +38,11 @@ async function main() {
   // 3. Assign Permissions to Roles (Manager & Intern)
   const managerRole = await prisma.role.findUnique({ where: { name: 'MANAGER' } });
   const internRole = await prisma.role.findUnique({ where: { name: 'INTERN' } });
+  const superAdminRole = await prisma.role.findUnique({ where: { name: 'SUPER_ADMIN' } });
+
+  const superAdminPerms = [
+    'ORGANIZATION_READ', 'ORGANIZATION_CREATE', 'ORGANIZATION_UPDATE', 'ORGANIZATION_DELETE'
+  ];
 
   const managerPerms = [
     'USER_READ', 'PROJECT_READ', 'PROJECT_CREATE', 'PROJECT_UPDATE', 'PROJECT_DELETE',
@@ -49,6 +55,27 @@ async function main() {
     'PROJECT_READ', 'TASK_READ', 'TASK_UPDATE', 'FORM_READ', 'FORM_SUBMIT',
     'ATTENDANCE_READ', 'ATTENDANCE_CREATE'
   ];
+
+  if (superAdminRole) {
+    for (const permName of superAdminPerms) {
+      const perm = await prisma.permission.findUnique({ where: { name: permName } });
+      if (perm) {
+        await prisma.rolePermission.upsert({
+          where: {
+            role_id_permission_id: {
+              role_id: superAdminRole.id,
+              permission_id: perm.id
+            }
+          },
+          update: {},
+          create: {
+            role_id: superAdminRole.id,
+            permission_id: perm.id
+          }
+        });
+      }
+    }
+  }
 
   if (managerRole) {
     for (const permName of managerPerms) {
@@ -136,8 +163,36 @@ async function main() {
     },
   });
 
+  const superAdmin = await prisma.user.upsert({
+    where: { email: 'superadmin@dailoqa.com' },
+    update: { organization_id: null },
+    create: {
+      name: 'Global Super Admin',
+      email: 'superadmin@dailoqa.com',
+      password_hash: passwordHash,
+      organization_id: null,
+      must_change_password: false,
+    },
+  });
+
   // 6. Assign Users to Roles
   const techLeadRole = await prisma.role.findUnique({ where: { name: 'TECH_LEAD' } });
+
+  if (superAdminRole && superAdmin) {
+    await prisma.userRole.upsert({
+      where: {
+        user_id_role_id: {
+          user_id: superAdmin.id,
+          role_id: superAdminRole.id
+        }
+      },
+      update: {},
+      create: {
+        user_id: superAdmin.id,
+        role_id: superAdminRole.id
+      }
+    });
+  }
 
   if (managerRole && manager) {
     await prisma.userRole.upsert({

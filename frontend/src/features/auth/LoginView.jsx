@@ -20,7 +20,9 @@ export default function LoginView() {
     try {
       const data = await login(email, password);
       
-      if (data.user.role === 'MANAGER') {
+      if (data.user.role === 'SUPER_ADMIN') {
+        navigate('/super-admin/dashboard');
+      } else if (data.user.role === 'MANAGER') {
         navigate('/manager/dashboard');
       } else if (data.user.role === 'INTERN') {
         navigate('/intern/dashboard');

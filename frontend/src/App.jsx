@@ -7,6 +7,7 @@ import ErrorBoundary from './shared/components/ErrorBoundary';
 import LoginView from './features/auth/LoginView';
 import ManagerApp from './ManagerApp';
 import InternApp from './features/intern/InternApp';
+import SuperAdminApp from './features/super-admin/SuperAdminApp';
 
 function AppRoutes() {
   const { logout } = useAuth();
@@ -29,6 +30,15 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={['INTERN']}>
             <InternApp onLogout={logout} />
+          </ProtectedRoute>
+        } 
+      />
+
+      <Route 
+        path="/super-admin/*" 
+        element={
+          <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+            <SuperAdminApp />
           </ProtectedRoute>
         } 
       />

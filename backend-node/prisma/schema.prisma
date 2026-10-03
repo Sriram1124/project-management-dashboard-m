@@ -26,6 +26,8 @@ model User {
   organization_id String?
   name            String
   email           String        @unique
+  user_code       String?
+  must_change_password Boolean    @default(true)
   password_hash   String
   is_active       Boolean       @default(true)
   created_at      DateTime      @default(now())
@@ -41,6 +43,7 @@ model User {
   created_forms      Form[]             @relation("FormCreator")
   form_submissions   FormSubmission[]   @relation("FormSubmitter")
 
+  @@unique([organization_id, user_code])
   @@map("users")
 }
 
