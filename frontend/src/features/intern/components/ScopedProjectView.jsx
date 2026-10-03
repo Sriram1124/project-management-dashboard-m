@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, 
   FolderKanban, 
@@ -16,12 +16,21 @@ import {
   ListTodo,
   FileQuestion,
   Layers,
-  Sparkles
+  Sparkles,
+  Search,
+  Check,
+  Loader2,
+  AlertCircle,
+  LayoutGrid,
+  List,
+  GitFork
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
-
 import { projectsService } from '../../../services/projects.service';
+import { workItemsService } from '../../../services/workItems.service';
 import FilePreviewModal from '../../../components/views/projects/FilePreviewModal';
+import PersonalKanbanBoard from './PersonalKanbanBoard';
+import HierarchyTreeView from './HierarchyTreeView';
 
 export default function ScopedProjectView({
   project,
@@ -32,6 +41,44 @@ export default function ScopedProjectView({
   const { user: authUser } = useAuth();
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'documents' | 'work' | 'sprint' | 'kanban' | 'mom'
   const [previewFile, setPreviewFile] = useState(null);
+
+  // Project Work Items State
+  const [projectWorkItems, setProjectWorkItems] = useState([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [taskFilter, setTaskFilter] = useState('ALL'); // 'ALL' | 'ASSIGNED_TO_ME' | 'TODO' | 'IN_PROGRESS' | 'COMPLETED'
+  const [taskSearch, setTaskSearch] = useState('');
+  const [workViewMode, setWorkViewMode] = useState('list'); // 'list' | 'hierarchy'
+
+  const loadProjectWorkItems = async () => {
+    if (!project?.id) return;
+    try {
+      setLoadingTasks(true);
+      const items = await workItemsService.listWorkItems({ project_id: project.id });
+      setProjectWorkItems(items || []);
+    } catch (err) {
+      console.error('Failed to load project work items:', err);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProjectWorkItems();
+  }, [project?.id]);
+
+  const handleToggleTask = async (taskOrId) => {
+    try {
+      const updated = await workItemsService.toggleComplete(taskOrId);
+      loadProjectWorkItems();
+      onToast?.(
+        updated?.status === 'COMPLETED'
+          ? `Marked "${updated.title}" completed!`
+          : `Reopened "${updated?.title}"`
+      );
+    } catch (err) {
+      onToast?.(err.message || 'Failed to update task status');
+    }
+  };
 
   if (!project) {
     return (
@@ -78,10 +125,10 @@ export default function ScopedProjectView({
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'documents', label: `Project Documents (${documents.length})` },
-    { id: 'work', label: 'My Work (Planned for V2)' },
-    { id: 'sprint', label: 'My Sprint (Planned for V2)' },
-    { id: 'kanban', label: 'Personal Kanban (Planned for V2)' },
-    { id: 'mom', label: 'Meeting Notes (Planned for V2)' }
+    { id: 'work', label: `Work Items (${projectWorkItems.length})` },
+    { id: 'kanban', label: 'Kanban Board' },
+    { id: 'sprint', label: 'Sprint Workspace' },
+    { id: 'mom', label: 'Meeting Notes' }
   ];
 
   return (
@@ -308,71 +355,295 @@ export default function ScopedProjectView({
         />
       )}
 
-      {/* Tab 3: My Work (V2 Placeholder) */}
-      {activeTab === 'work' && (
-        <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-card text-center space-y-3">
-          <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mx-auto">
-            <CheckSquare className="w-6 h-6" />
+      {/* Tab 3: Work Items (Live Data) */}
+      {activeTab === 'work' && (() => {
+        const getTypeBadge = (type) => {
+          switch (type) {
+            case 'EPIC':
+              return 'bg-purple-100 text-purple-800 border-purple-200';
+            case 'STORY':
+              return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+            case 'TASK':
+              return 'bg-blue-100 text-blue-800 border-blue-200';
+            case 'SUBTASK':
+              return 'bg-slate-100 text-slate-800 border-slate-200';
+            case 'BUG':
+              return 'bg-rose-100 text-rose-800 border-rose-200';
+            default:
+              return 'bg-slate-100 text-slate-800 border-slate-200';
+          }
+        };
+
+        const getStatusBadge = (status) => {
+          switch (status) {
+            case 'COMPLETED':
+              return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+            case 'IN_PROGRESS':
+              return 'bg-purple-100 text-purple-800 border-purple-200';
+            case 'IN_REVIEW':
+              return 'bg-blue-100 text-blue-800 border-blue-200';
+            case 'BLOCKED':
+              return 'bg-rose-100 text-rose-800 border-rose-200';
+            case 'TODO':
+            default:
+              return 'bg-slate-100 text-slate-700 border-slate-200';
+          }
+        };
+
+        const filteredTasks = projectWorkItems.filter((item) => {
+          const matchSearch =
+            !taskSearch ||
+            (item.title && item.title.toLowerCase().includes(taskSearch.toLowerCase())) ||
+            (item.id && item.id.toLowerCase().includes(taskSearch.toLowerCase()));
+          if (!matchSearch) return false;
+
+          if (taskFilter === 'ASSIGNED_TO_ME') {
+            const isAssigned = item.assignees?.some(
+              (a) => a.user_id === authUser?.id || a.email === authUser?.email
+            );
+            if (!isAssigned) return false;
+          } else if (taskFilter === 'TODO') {
+            if (item.status !== 'TODO') return false;
+          } else if (taskFilter === 'IN_PROGRESS') {
+            if (item.status !== 'IN_PROGRESS') return false;
+          } else if (taskFilter === 'COMPLETED') {
+            if (item.status !== 'COMPLETED') return false;
+          }
+          return true;
+        });
+
+        return (
+          <div className="space-y-4">
+            {/* Toolbar */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={taskSearch}
+                    onChange={(e) => setTaskSearch(e.target.value)}
+                    placeholder="Search tasks..."
+                    className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 w-48 sm:w-60"
+                  />
+                </div>
+
+                {/* Filter Pills */}
+                <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs">
+                  {[
+                    { id: 'ALL', label: 'All' },
+                    { id: 'ASSIGNED_TO_ME', label: 'Assigned to Me' },
+                    { id: 'TODO', label: 'To Do' },
+                    { id: 'IN_PROGRESS', label: 'In Progress' },
+                    { id: 'COMPLETED', label: 'Done' },
+                  ].map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setTaskFilter(f.id)}
+                      className={`px-2.5 py-1 rounded-lg font-medium text-[11px] transition-colors ${
+                        taskFilter === f.id
+                          ? 'bg-white text-purple-700 font-bold shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* View Mode Toggle */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setWorkViewMode('list')}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    workViewMode === 'list'
+                      ? 'bg-white text-purple-700 shadow-2xs font-semibold'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                  title="List View"
+                >
+                  <List className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWorkViewMode('hierarchy')}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    workViewMode === 'hierarchy'
+                      ? 'bg-white text-purple-700 shadow-2xs font-semibold'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                  title="Hierarchy Tree View"
+                >
+                  <GitFork className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Loading */}
+            {loadingTasks && (
+              <div className="py-12 bg-white rounded-2xl border border-slate-200 text-center">
+                <Loader2 className="w-8 h-8 text-purple-600 animate-spin mx-auto mb-2" />
+                <p className="text-xs text-slate-500">Loading project work items...</p>
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!loadingTasks && filteredTasks.length === 0 && (
+              <div className="py-12 bg-white rounded-2xl border border-dashed border-slate-200 text-center space-y-2">
+                <CheckSquare className="w-8 h-8 text-slate-300 mx-auto" />
+                <h4 className="text-sm font-bold text-slate-700">No work items found</h4>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  {taskFilter === 'ASSIGNED_TO_ME'
+                    ? 'You do not have any tasks assigned in this project yet.'
+                    : 'Work items added to this project will appear here.'}
+                </p>
+              </div>
+            )}
+
+            {/* Tree View */}
+            {!loadingTasks && filteredTasks.length > 0 && workViewMode === 'hierarchy' && (
+              <HierarchyTreeView
+                workItems={filteredTasks}
+                onTaskClick={onTaskClick}
+                onToggleTask={handleToggleTask}
+              />
+            )}
+
+            {/* List View */}
+            {!loadingTasks && filteredTasks.length > 0 && workViewMode === 'list' && (
+              <div className="space-y-2">
+                {filteredTasks.map((item) => {
+                  const isDone = item.status === 'COMPLETED';
+                  const isOverdue = workItemsService.isOverdue(item);
+
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => onTaskClick?.(item)}
+                      className={`p-3.5 bg-white border rounded-xl flex items-center justify-between gap-3 hover:border-purple-200 hover:shadow-2xs transition-all cursor-pointer ${
+                        isOverdue ? 'border-rose-200 bg-rose-50/20' : 'border-slate-200'
+                      }`}
+                    >
+                      {/* Left: Checkbox + Title + Type Badge */}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleTask(item);
+                          }}
+                          className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-colors shrink-0 ${
+                            isDone
+                              ? 'bg-emerald-500 border-emerald-500 text-white'
+                              : 'border-slate-300 hover:border-purple-500'
+                          }`}
+                        >
+                          {isDone && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        </button>
+
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${getTypeBadge(
+                                item.type
+                              )}`}
+                            >
+                              {item.type}
+                            </span>
+                            <span
+                              className={`text-xs font-bold truncate ${
+                                isDone ? 'line-through text-slate-400' : 'text-slate-800'
+                              }`}
+                            >
+                              {item.title}
+                            </span>
+                          </div>
+                          {item.description && (
+                            <p className="text-[11px] text-slate-400 truncate max-w-md mt-0.5">
+                              {item.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right: Meta pills */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {item.due_date && (
+                          <span
+                            className={`flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded ${
+                              isOverdue
+                                ? 'bg-rose-50 text-rose-600 font-bold'
+                                : 'bg-slate-50 text-slate-500'
+                            }`}
+                          >
+                            <Calendar className="w-3 h-3" />
+                            {new Date(item.due_date).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </span>
+                        )}
+
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${getStatusBadge(
+                            item.status
+                          )}`}
+                        >
+                          {item.status?.replace('_', ' ')}
+                        </span>
+
+                        <ChevronRight className="w-4 h-4 text-slate-300" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-          <h3 className="text-base font-bold text-slate-800">My Work Items — Planned for V2</h3>
-          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-            Individual task assignment, story point estimation, and deliverable ticket tracking will be enabled in Phase 2 of the Project Management platform.
-          </p>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-[11px] font-semibold">
-            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-            <span>Work Items Module Scheduled for V2</span>
-          </div>
-        </div>
+        );
+      })()}
+
+      {/* Tab 4: Kanban Board (Live Data) */}
+      {activeTab === 'kanban' && (
+        <PersonalKanbanBoard
+          workItems={projectWorkItems}
+          onTaskClick={onTaskClick}
+          onTaskUpdated={loadProjectWorkItems}
+          onToast={onToast}
+        />
       )}
 
-      {/* Tab 4: My Sprint (V2 Placeholder) */}
+      {/* Tab 5: Sprint Placeholder (Planned for V2) */}
       {activeTab === 'sprint' && (
-        <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-card text-center space-y-3">
-          <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto">
+        <div className="bg-white rounded-2xl p-12 border border-slate-200 shadow-card text-center max-w-lg mx-auto my-8 space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-1">
             <Zap className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-slate-800">Sprint Management — Planned for V2</h3>
-          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-            Active sprint iteration tracking, burn-down velocity, and sprint retrospective deliverables will be available in V2.
+          <h3 className="text-base font-bold text-slate-900">Sprint Management</h3>
+          <p className="text-xs text-slate-500 leading-relaxed max-w-md mx-auto">
+            Advanced sprint planning, burndown metrics, and iteration tracking will be available in V2.
           </p>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-[11px] font-semibold">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Sprint Cycles Scheduled for V2</span>
-          </div>
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+            Planned for V2
+          </span>
         </div>
       )}
 
-      {/* Tab 5: Personal Kanban (V2 Placeholder) */}
-      {activeTab === 'kanban' && (
-        <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-card text-center space-y-3">
-          <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto">
-            <Layers className="w-6 h-6" />
-          </div>
-          <h3 className="text-base font-bold text-slate-800">Personal Kanban Board — Planned for V2</h3>
-          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-            Drag-and-drop interactive kanban columns and real-time state synchronization will be introduced in V2.
-          </p>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-[11px] font-semibold">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Kanban Board Scheduled for V2</span>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 6: Meeting Notes (V2 Placeholder) */}
+      {/* Tab 6: Meeting Notes Placeholder (Planned for V2) */}
       {activeTab === 'mom' && (
-        <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-card text-center space-y-3">
-          <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
+        <div className="bg-white rounded-2xl p-12 border border-slate-200 shadow-card text-center max-w-lg mx-auto my-8 space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mx-auto mb-1">
             <MessageSquare className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-slate-800">Meeting Notes (MoM) — Planned for V2</h3>
-          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-            Recording meeting minutes, AI transcription summaries, attendee check-ins, and actionable decision items are scheduled for V2.
+          <h3 className="text-base font-bold text-slate-900">Meeting Notes (MoM)</h3>
+          <p className="text-xs text-slate-500 leading-relaxed max-w-md mx-auto">
+            Minutes of Meeting (MoM) module will be available in V2.
           </p>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-[11px] font-semibold">
-            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-            <span>Minutes of Meeting Module Scheduled for V2</span>
-          </div>
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+            Planned for V2
+          </span>
         </div>
       )}
     </div>

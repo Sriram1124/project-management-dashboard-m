@@ -30,9 +30,9 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  const login = async (email, password) => {
+  const login = async (identifier, password, organization_id = null) => {
     // Real PostgreSQL API Call:
-    const data = await authService.login(email, password);
+    const data = await authService.login(identifier, password, organization_id);
     setUser(data.user);
     if (data.user) {
       localStorage.setItem('user', JSON.stringify(data.user));

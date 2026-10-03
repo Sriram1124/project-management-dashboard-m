@@ -39,6 +39,7 @@ export default function TeamsChannelView({
   const [forms, setForms] = useState([]);
   const [selectedFormForView, setSelectedFormForView] = useState(null);
   const [selectedFormBuilder, setSelectedFormBuilder] = useState(null);
+  const [selectedFormForEdit, setSelectedFormForEdit] = useState(null);
   const [chatMessage, setChatMessage] = useState('');
 
   const loadForms = async () => {
@@ -56,9 +57,6 @@ export default function TeamsChannelView({
 
   const channelsList = [
     { id: 'forms-and-surveys', name: 'forms-and-surveys', count: forms.length, isPrimary: true },
-    { id: 'general-announcements', name: 'announcements', count: 2 },
-    { id: 'sprint-discussions', name: 'sprint-05-sync', count: 14 },
-    { id: 'leads-coordination', name: 'leads-only', count: 5 },
   ];
 
   const filteredForms = forms.filter((f) => {
@@ -142,10 +140,10 @@ export default function TeamsChannelView({
               <span className="text-[10px] font-bold uppercase text-slate-400">Channel Audience</span>
               <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-700 font-semibold">
                 <Users className="w-4 h-4 text-purple-600" />
-                <span>48 Interns • 6 Tech Leads</span>
+                <span>Organization Members</span>
               </div>
               <p className="text-[10px] text-slate-400 mt-1 leading-normal">
-                Forms posted by the Manager notify all active sections (A1-D2).
+                Forms posted by the Manager are visible to active organization members for submission.
               </p>
             </div>
           </div>
@@ -227,7 +225,7 @@ export default function TeamsChannelView({
           <div className="p-4 rounded-xl bg-purple-50/70 border border-purple-200/80 flex items-start gap-3">
             <Sparkles className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
             <div className="text-xs text-purple-950 leading-relaxed">
-              <strong className="font-bold">Teams Channel Form Management:</strong> All forms posted here by the Program Manager are immediately visible to all 48 interns across Sections A1-D2. Interns can submit their responses directly from this channel or their workstation portal.
+              <strong className="font-bold">Forms Management Channel:</strong> Forms posted here by the Manager are immediately accessible to active members for response submission.
             </div>
           </div>
 
@@ -329,6 +327,12 @@ export default function TeamsChannelView({
                       {form.status === 'DRAFT' && (
                         <>
                           <button
+                            onClick={() => setSelectedFormForEdit(form)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                          >
+                            <span>Edit Form</span>
+                          </button>
+                          <button
                             onClick={() => setSelectedFormBuilder(form)}
                             className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
                           >
@@ -413,6 +417,18 @@ export default function TeamsChannelView({
             setIsPostModalOpen(false);
             loadForms();
             onToast?.('New form created successfully.');
+          }}
+        />
+      )}
+
+      {selectedFormForEdit && (
+        <CreateFormModal
+          form={selectedFormForEdit}
+          onClose={() => setSelectedFormForEdit(null)}
+          onSuccess={() => {
+            setSelectedFormForEdit(null);
+            loadForms();
+            onToast?.('Form updated successfully.');
           }}
         />
       )}

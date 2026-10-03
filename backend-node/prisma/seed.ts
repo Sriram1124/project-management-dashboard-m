@@ -7,7 +7,7 @@ async function main() {
   console.log('Seeding roles and permissions...');
 
   // 1. Create Roles
-  const roles = ['ADMIN', 'MANAGER', 'INTERN', 'TECH_LEAD', 'SUPER_ADMIN'];
+  const roles = ['ADMIN', 'MANAGER', 'INTERN', 'TECH_LEAD', 'SUPER_ADMIN', 'EMPLOYEE'];
   for (const roleName of roles) {
     await prisma.role.upsert({
       where: { name: roleName },
@@ -18,7 +18,7 @@ async function main() {
 
   // 2. Create Permissions
   const permissions = [
-    'USER_READ', 'USER_CREATE', 'USER_UPDATE', 'USER_DELETE',
+    'USER_READ', 'USER_CREATE', 'USER_BULK_CREATE', 'USER_UPDATE', 'USER_DELETE',
     'PROJECT_READ', 'PROJECT_CREATE', 'PROJECT_UPDATE', 'PROJECT_DELETE',
     'TASK_READ', 'TASK_CREATE', 'TASK_UPDATE', 'TASK_DELETE', 'TASK_ASSIGN',
     'FORM_READ', 'FORM_CREATE', 'FORM_UPDATE', 'FORM_DELETE', 'FORM_SUBMIT',
@@ -35,9 +35,10 @@ async function main() {
     });
   }
 
-  // 3. Assign Permissions to Roles (Manager & Intern)
+  // 3. Assign Permissions to Roles (Manager & Intern & Employee)
   const managerRole = await prisma.role.findUnique({ where: { name: 'MANAGER' } });
   const internRole = await prisma.role.findUnique({ where: { name: 'INTERN' } });
+  const employeeRole = await prisma.role.findUnique({ where: { name: 'EMPLOYEE' } });
   const superAdminRole = await prisma.role.findUnique({ where: { name: 'SUPER_ADMIN' } });
 
   const superAdminPerms = [
@@ -45,13 +46,18 @@ async function main() {
   ];
 
   const managerPerms = [
-    'USER_READ', 'PROJECT_READ', 'PROJECT_CREATE', 'PROJECT_UPDATE', 'PROJECT_DELETE',
+    'USER_READ', 'USER_CREATE', 'USER_BULK_CREATE', 'PROJECT_READ', 'PROJECT_CREATE', 'PROJECT_UPDATE', 'PROJECT_DELETE',
     'TASK_READ', 'TASK_CREATE', 'TASK_UPDATE', 'TASK_DELETE', 'TASK_ASSIGN',
     'FORM_READ', 'FORM_CREATE', 'FORM_UPDATE', 'EVALUATION_READ', 'EVALUATION_CREATE', 'EVALUATION_UPDATE',
     'ATTENDANCE_READ', 'ATTENDANCE_CREATE', 'ATTENDANCE_UPDATE'
   ];
 
   const internPerms = [
+    'PROJECT_READ', 'TASK_READ', 'TASK_UPDATE', 'FORM_READ', 'FORM_SUBMIT',
+    'ATTENDANCE_READ', 'ATTENDANCE_CREATE'
+  ];
+
+  const employeePerms = [
     'PROJECT_READ', 'TASK_READ', 'TASK_UPDATE', 'FORM_READ', 'FORM_SUBMIT',
     'ATTENDANCE_READ', 'ATTENDANCE_CREATE'
   ];
@@ -112,6 +118,27 @@ async function main() {
           update: {},
           create: {
             role_id: internRole.id,
+            permission_id: perm.id
+          }
+        });
+      }
+    }
+  }
+
+  if (employeeRole) {
+    for (const permName of employeePerms) {
+      const perm = await prisma.permission.findUnique({ where: { name: permName } });
+      if (perm) {
+        await prisma.rolePermission.upsert({
+          where: {
+            role_id_permission_id: {
+              role_id: employeeRole.id,
+              permission_id: perm.id
+            }
+          },
+          update: {},
+          create: {
+            role_id: employeeRole.id,
             permission_id: perm.id
           }
         });

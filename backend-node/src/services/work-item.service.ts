@@ -133,7 +133,7 @@ export class WorkItemService {
 
       case WorkItemType.TASK:
         if (parent.type !== WorkItemType.STORY) {
-          throw new Error('TASK parent must be a STORY');
+          throw new Error('TASK must have a parent of type STORY');
         }
         break;
 

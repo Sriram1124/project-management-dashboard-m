@@ -17,6 +17,7 @@ model Organization {
   projects   Project[]
   work_items WorkItem[]
   forms      Form[]
+  notifications Notification[]
 
   @@map("organizations")
 }
@@ -42,6 +43,8 @@ model User {
   work_item_assignments WorkItemAssignee[]
   created_forms      Form[]             @relation("FormCreator")
   form_submissions   FormSubmission[]   @relation("FormSubmitter")
+  sent_notifications Notification[]     @relation("SentNotifications")
+  received_notifications NotificationRecipient[] @relation("ReceivedNotifications")
 
   @@unique([organization_id, user_code])
   @@map("users")
@@ -333,4 +336,49 @@ model SubmissionAnswer {
   @@index([submission_id])
   @@index([question_id])
   @@map("submission_answers")
+}
+
+enum NotificationType {
+  BROADCAST
+  DIRECT
+  SYSTEM
+  TASK_ASSIGNED
+  FORM_ASSIGNED
+}
+
+model Notification {
+  id              String           @id @default(uuid())
+  organization_id String
+  sender_id       String
+  title           String
+  message         String
+  type            NotificationType @default(BROADCAST)
+  created_at      DateTime         @default(now())
+  updated_at      DateTime         @updatedAt
+
+  organization    Organization     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  sender          User             @relation("SentNotifications", fields: [sender_id], references: [id], onDelete: Cascade)
+  recipients      NotificationRecipient[]
+
+  @@index([organization_id])
+  @@index([sender_id])
+  @@map("notifications")
+}
+
+model NotificationRecipient {
+  id              String       @id @default(uuid())
+  notification_id String
+  user_id         String
+  read_at         DateTime?
+  delivered       Boolean      @default(false)
+  created_at      DateTime     @default(now())
+
+  notification    Notification @relation(fields: [notification_id], references: [id], onDelete: Cascade)
+  user            User         @relation("ReceivedNotifications", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([notification_id, user_id])
+  @@index([notification_id])
+  @@index([user_id])
+  @@index([user_id, read_at])
+  @@map("notification_recipients")
 }

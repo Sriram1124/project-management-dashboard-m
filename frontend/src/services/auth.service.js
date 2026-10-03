@@ -1,12 +1,20 @@
 import api from './api';
 
 export const authService = {
-  async login(email, password) {
-    const data = await api.post('/auth/login', { email, password });
+  async login(identifier, password, organization_id = null) {
+    const payload = { email: identifier, password };
+    if (organization_id) {
+      payload.organization_id = organization_id;
+    }
+    const data = await api.post('/auth/login', payload);
     if (data.accessToken) {
       localStorage.setItem('accessToken', data.accessToken);
     }
     return data;
+  },
+
+  async getOrganizations() {
+    return await api.get('/auth/organizations');
   },
 
   async logout() {
@@ -24,5 +32,9 @@ export const authService = {
     } catch (error) {
       return null;
     }
+  },
+
+  async changePassword(current_password, new_password) {
+    return await api.post('/auth/change-password', { current_password, new_password });
   }
 };

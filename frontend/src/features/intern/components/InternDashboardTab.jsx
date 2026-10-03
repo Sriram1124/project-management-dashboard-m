@@ -12,12 +12,16 @@ import {
   ChevronRight,
   BarChart3,
   LineChart,
-  Loader2
+  Loader2,
+  Megaphone,
+  X,
+  Check
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { userService } from '../services/userService';
 import { projectsService } from '../services/projectsService';
 import { workItemsService } from '../services/workItemsService';
+import { notificationsService } from '../services/notificationsService';
 
 export default function InternDashboardTab({
   workItems = [],
@@ -36,6 +40,7 @@ export default function InternDashboardTab({
 
   const [projects, setProjects] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
+  const [dismissedAlertIds, setDismissedAlertIds] = useState(() => new Set());
 
   useEffect(() => {
     projectsService.getMyProjects()
@@ -111,6 +116,85 @@ export default function InternDashboardTab({
           </button>
         </div>
       </div>
+
+      {/* URGENT / BROADCAST ALERT BANNER */}
+      {(() => {
+        const unreadAlerts = notifications.filter((n) => !n.is_read);
+        const activeAlert = unreadAlerts.find((n) => !dismissedAlertIds.has(n.id));
+        if (!activeAlert) return null;
+
+        const senderName = activeAlert.raw?.sender?.name || activeAlert.sender?.name || 'Manager';
+
+        return (
+          <div className="relative overflow-hidden rounded-2xl border-2 border-purple-300 bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 p-5 text-white shadow-md animate-in fade-in slide-in-from-top-3 duration-300">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/30 border border-purple-400/40 text-amber-300 flex items-center justify-center shrink-0 mt-0.5">
+                  <Megaphone className="w-5 h-5 animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500 text-white shadow-2xs">
+                      ORGANIZATION ALERT
+                    </span>
+                    <span className="text-xs text-purple-200 font-semibold">
+                      From: {senderName}
+                    </span>
+                    <span className="text-[11px] text-purple-300/80">
+                      • {activeAlert.created_at}
+                    </span>
+                  </div>
+                  <h2 className="text-base font-black tracking-tight text-white">
+                    {activeAlert.title}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-purple-100/90 leading-relaxed max-w-3xl whitespace-pre-line">
+                    {activeAlert.message}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setDismissedAlertIds((prev) => new Set(prev).add(activeAlert.id))}
+                className="p-1.5 rounded-lg text-purple-300 hover:text-white hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
+                title="Dismiss alert banner"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-purple-800/80 flex flex-wrap items-center justify-between gap-3">
+              <div className="text-[11px] text-purple-200">
+                {unreadAlerts.length > 1 && (
+                  <span className="font-semibold text-amber-300">
+                    {unreadAlerts.length} unread alerts in your inbox
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await notificationsService.markAsRead(activeAlert.id);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold shadow-2xs transition-all cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Acknowledge / Mark Read</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab ? onNavigateTab('alerts') : onOpenNotifications?.()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition-all cursor-pointer border border-white/20"
+                >
+                  <span>View All Alerts ({unreadAlerts.length})</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 2. QUICK STATUS BAR */}
       <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs">

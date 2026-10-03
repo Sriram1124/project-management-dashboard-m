@@ -27,7 +27,12 @@ export class ProjectController {
       return;
     }
 
-    if (msg.includes('organization')) {
+    if (
+      msg.includes('Forbidden') ||
+      msg.includes('forbidden') ||
+      msg.includes('permission') ||
+      msg.includes('organization')
+    ) {
       res.status(403).json({ error: msg });
       return;
     }

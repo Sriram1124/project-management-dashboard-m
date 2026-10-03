@@ -1,20 +1,37 @@
 import { Request, Response } from 'express';
 import { AuthService } from '../services/auth.service';
+import { UserService } from '../services/user.service';
 import { prisma } from '../lib/prisma';
 
 export class AuthController {
+  static async getOrganizations(req: Request, res: Response): Promise<void> {
+    try {
+      const organizations = await prisma.organization.findMany({
+        select: {
+          id: true,
+          name: true,
+        },
+        orderBy: { name: 'asc' },
+      });
+      res.status(200).json(organizations);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch organizations' });
+    }
+  }
+
   static async login(req: Request, res: Response): Promise<void> {
     try {
-      const { email, password } = req.body;
-      if (!email || !password) {
-        res.status(400).json({ error: 'Email and password are required' });
+      const { email, identifier, password, organization_id } = req.body;
+      const userIdentifier = (email || identifier || '').trim();
+      if (!userIdentifier || !password) {
+        res.status(400).json({ error: 'Email / User ID and password are required' });
         return;
       }
 
       const userAgent = req.headers['user-agent'];
       const ipAddress = req.ip;
 
-      const result = await AuthService.login(email, password, userAgent, ipAddress);
+      const result = await AuthService.login(userIdentifier, password, organization_id || null, userAgent, ipAddress);
 
       // Set session cookie
       res.cookie('sessionId', result.sessionId, {
@@ -124,6 +141,36 @@ export class AuthController {
       });
     } catch (error) {
       res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async changePassword(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as any).user?.userId;
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      const { current_password, new_password } = req.body;
+      if (!current_password || !new_password) {
+        res.status(400).json({ error: 'current_password and new_password are required' });
+        return;
+      }
+
+      const result = await UserService.changePassword(userId, current_password, new_password);
+      res.status(200).json(result);
+    } catch (error: any) {
+      if (
+        error.message?.includes('incorrect') ||
+        error.message?.includes('different') ||
+        error.message?.includes('at least') ||
+        error.message?.includes('required')
+      ) {
+        res.status(400).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: error.message || 'Failed to change password' });
+      }
     }
   }
 }

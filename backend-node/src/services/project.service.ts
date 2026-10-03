@@ -40,6 +40,25 @@ export class ProjectService {
   }
 
   /**
+   * Helper to check if user has admin, manager or super admin role
+   */
+  private static isManagerOrAdmin(user: any): boolean {
+    if (user.role === 'ADMIN' || user.role === 'MANAGER' || user.role === 'SUPER_ADMIN') return true;
+    if (Array.isArray(user.roles)) {
+      return user.roles.some(
+        (ur: any) =>
+          ur.role?.name === 'ADMIN' ||
+          ur.role?.name === 'MANAGER' ||
+          ur.role?.name === 'SUPER_ADMIN' ||
+          ur.name === 'ADMIN' ||
+          ur.name === 'MANAGER' ||
+          ur.name === 'SUPER_ADMIN'
+      );
+    }
+    return false;
+  }
+
+  /**
    * List all projects scoped to the user's organization
    */
   static async listProjects(user: any, filters?: { status?: string; my?: boolean }) {
@@ -146,6 +165,14 @@ export class ProjectService {
 
     if (!project) {
       throw new Error('Project not found');
+    }
+
+    const isMgr = this.isManagerOrAdmin(user);
+    if (!isMgr && project.owner_id !== user.id) {
+      const isMember = project.members.some((m) => m.user_id === user.id);
+      if (!isMember) {
+        throw new Error('Forbidden: you are not a member of this project');
+      }
     }
 
     return project;

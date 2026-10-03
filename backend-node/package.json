@@ -14,10 +14,12 @@
   "dependencies": {
     "@types/multer": "^2.3.0",
     "argon2": "^0.45.1",
+    "bullmq": "^6.3.11",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^18.0.4",
     "express": "^5.2.1",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.4.0"
   },

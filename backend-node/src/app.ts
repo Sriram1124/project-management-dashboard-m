@@ -7,6 +7,7 @@ import { userRouter } from './routes/user.routes';
 import { workItemRouter } from './routes/work-item.routes';
 import { formRouter } from './routes/form.routes';
 import { organizationRouter } from './routes/organization.routes';
+import { notificationRouter } from './routes/notification.routes';
 
 const app = express();
 
@@ -29,5 +30,6 @@ app.use('/api/users', userRouter);
 app.use('/api/work-items', workItemRouter);
 app.use('/api/forms', formRouter);
 app.use('/api/organizations', organizationRouter);
+app.use('/api/notifications', notificationRouter);
 
 export default app;

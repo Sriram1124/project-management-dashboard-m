@@ -16,6 +16,7 @@ import ExceptionDetailModal from './components/modals/ExceptionDetailModal';
 import TeamsChannelView from './components/channels/TeamsChannelView';
 import { CheckCircle2 } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
+import { notificationsService } from './services/notifications.service';
 
 export default function ManagerApp() {
   const { user: authUser, logout } = useAuth();
@@ -106,8 +107,22 @@ export default function ManagerApp() {
     );
   };
 
-  const handleCustomAlertFromBar = (message) => {
-    triggerToast(`Broadcast alert sent: "${message.slice(0, 32)}..."`);
+  const handleCustomAlertFromBar = async (alertData, recipientIds = []) => {
+    try {
+      const title = typeof alertData === 'object' && alertData.title ? alertData.title : 'Broadcast Announcement';
+      const message = typeof alertData === 'object' && alertData.message ? alertData.message : String(alertData);
+
+      await notificationsService.sendBroadcast({
+        title,
+        message,
+        recipient_ids: recipientIds,
+      });
+
+      triggerToast(`Broadcast alert dispatched to ${recipientIds.length} recipient${recipientIds.length === 1 ? '' : 's'}`);
+    } catch (err) {
+      console.error('Failed to send broadcast alert:', err);
+      triggerToast(err.message || 'Failed to dispatch broadcast alert');
+    }
   };
 
   const handleActionFromException = (actionName) => {

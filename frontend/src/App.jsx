@@ -28,7 +28,7 @@ function AppRoutes() {
       <Route 
         path="/intern/*" 
         element={
-          <ProtectedRoute allowedRoles={['INTERN']}>
+          <ProtectedRoute allowedRoles={['INTERN', 'EMPLOYEE']}>
             <InternApp onLogout={logout} />
           </ProtectedRoute>
         } 

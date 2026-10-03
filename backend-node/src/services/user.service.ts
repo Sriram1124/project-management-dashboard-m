@@ -1,0 +1,783 @@
+import * as crypto from 'crypto';
+import * as argon2 from 'argon2';
+import { prisma } from '../lib/prisma';
+
+export interface CreateUserInput {
+  name: string;
+  email: string;
+  type: 'INTERN' | 'EMPLOYEE';
+  managerOrgId: string;
+}
+
+export interface CsvRow {
+  rowNumber: number;
+  name: string;
+  email: string;
+  type: 'INTERN' | 'EMPLOYEE';
+}
+
+export interface InvalidCsvRow {
+  rowNumber: number;
+  name: string;
+  email: string;
+  reason: string;
+}
+
+export interface CsvValidationResult {
+  isValid: boolean;
+  summary: {
+    total: number;
+    valid: number;
+    invalid: number;
+  };
+  validRows: CsvRow[];
+  invalidRows: InvalidCsvRow[];
+  errors: string[];
+}
+
+export class UserService {
+  /**
+   * Cryptographically secure temporary password generator
+   */
+  private static generateTemporaryPassword(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+    const randomBytes = crypto.randomBytes(12);
+    let pwd = '';
+    for (let i = 0; i < 12; i++) {
+      pwd += chars[randomBytes[i] % chars.length];
+    }
+    return pwd;
+  }
+
+  /**
+   * Generates a unique user code scoped to organization
+   * Guarantees uniqueness against DB AND against codes allocated in the current batch
+   */
+  public static async generateUserCode(
+    prefix: string,
+    orgId: string,
+    reservedCodesInBatch: Set<string> = new Set()
+  ): Promise<string> {
+    // Attempt 1: 4-digit random numbers (1000 - 9999) using crypto.randomInt
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const codeNum = crypto.randomInt(1000, 10000);
+      const candidate = `${prefix}-${codeNum}`;
+
+      if (reservedCodesInBatch.has(candidate)) {
+        continue;
+      }
+
+      const existing = await prisma.user.findFirst({
+        where: {
+          organization_id: orgId,
+          user_code: candidate,
+        },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        reservedCodesInBatch.add(candidate);
+        return candidate;
+      }
+    }
+
+    // Attempt 2: 5-digit fallback if high density collisions occur
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const codeNum = crypto.randomInt(10000, 100000);
+      const candidate = `${prefix}-${codeNum}`;
+
+      if (reservedCodesInBatch.has(candidate)) {
+        continue;
+      }
+
+      const existing = await prisma.user.findFirst({
+        where: {
+          organization_id: orgId,
+          user_code: candidate,
+        },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        reservedCodesInBatch.add(candidate);
+        return candidate;
+      }
+    }
+
+    // Final safety fallback: timestamp + random suffix
+    const candidate = `${prefix}-${Date.now().toString().slice(-4)}${crypto.randomInt(10, 99)}`;
+    reservedCodesInBatch.add(candidate);
+    return candidate;
+  }
+
+  /**
+   * Parse a single CSV line handling quotes and trimmed values
+   */
+  private static parseCsvLine(line: string): string[] {
+    const cols: string[] = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        cols.push(cur.trim());
+        cur = '';
+      } else {
+        cur += char;
+      }
+    }
+    cols.push(cur.trim());
+    return cols.map((col) => col.replace(/^["']|["']$/g, '').trim());
+  }
+
+  /**
+   * Create an individual organization user (Intern or Employee)
+   */
+  static async createUser(input: CreateUserInput) {
+    const { name, email, type, managerOrgId } = input;
+
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      throw new Error('Name is required');
+    }
+    if (name.trim().length > 100) {
+      throw new Error('Name cannot exceed 100 characters');
+    }
+
+    if (!email || typeof email !== 'string' || !email.trim()) {
+      throw new Error('Email is required');
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      throw new Error('Invalid email format');
+    }
+
+    if (!type || (type !== 'INTERN' && type !== 'EMPLOYEE')) {
+      throw new Error('Type must be either INTERN or EMPLOYEE');
+    }
+
+    if (!managerOrgId) {
+      throw new Error('Manager organization is required');
+    }
+
+    // Check globally unique email
+    const existing = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+    if (existing) {
+      const err: any = new Error(`A user with email "${normalizedEmail}" already exists.`);
+      err.statusCode = 409;
+      throw err;
+    }
+
+    // Lookup role
+    const roleRecord = await prisma.role.findUnique({
+      where: { name: type },
+    });
+    if (!roleRecord) {
+      throw new Error(`Role "${type}" is not configured in the system.`);
+    }
+
+    const prefix = type === 'INTERN' ? 'INT' : 'EMP';
+    const userCode = await this.generateUserCode(prefix, managerOrgId, new Set<string>());
+    const temporaryPassword = this.generateTemporaryPassword();
+    const passwordHash = await argon2.hash(temporaryPassword);
+
+    // Atomic transaction
+    try {
+      const newUser = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            name: name.trim(),
+            email: normalizedEmail,
+            user_code: userCode,
+            password_hash: passwordHash,
+            organization_id: managerOrgId,
+            must_change_password: true,
+            is_active: true,
+          },
+        });
+
+        await tx.userRole.create({
+          data: {
+            user_id: user.id,
+            role_id: roleRecord.id,
+          },
+        });
+
+        return user;
+      });
+
+      return {
+        user: {
+          id: newUser.id,
+          user_code: newUser.user_code,
+          name: newUser.name,
+          email: newUser.email,
+          type,
+          must_change_password: true,
+          created_at: newUser.created_at,
+        },
+        temporary_password: temporaryPassword,
+      };
+    } catch (err: any) {
+      if (err.code === 'P2002') {
+        const cleanErr: any = new Error(`A user with email "${normalizedEmail}" already exists.`);
+        cleanErr.statusCode = 409;
+        throw cleanErr;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Validate CSV content for bulk import preview
+   */
+  static async validateBulkCsv(csvContent: string, managerOrgId: string): Promise<CsvValidationResult> {
+    if (!csvContent || typeof csvContent !== 'string') {
+      return {
+        isValid: false,
+        summary: { total: 0, valid: 0, invalid: 0 },
+        validRows: [],
+        invalidRows: [],
+        errors: ['CSV content is empty or invalid.'],
+      };
+    }
+
+    const lines = csvContent
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    if (lines.length < 2) {
+      return {
+        isValid: false,
+        summary: { total: 0, valid: 0, invalid: 0 },
+        validRows: [],
+        invalidRows: [],
+        errors: ['CSV file must contain a header row and at least one data row.'],
+      };
+    }
+
+    const rawHeaders = this.parseCsvLine(lines[0]).map((h) => h.toLowerCase());
+
+    // Security violation: forbid client specifying sensitive columns
+    if (
+      rawHeaders.includes('organization_id') ||
+      rawHeaders.includes('password') ||
+      rawHeaders.includes('user_id') ||
+      rawHeaders.includes('user_code')
+    ) {
+      return {
+        isValid: false,
+        summary: { total: 0, valid: 0, invalid: 0 },
+        validRows: [],
+        invalidRows: [],
+        errors: ['Security Violation: CSV cannot contain organization_id, password, user_id, or user_code columns.'],
+      };
+    }
+
+    if (rawHeaders.length < 3 || rawHeaders[0] !== 'name' || rawHeaders[1] !== 'email' || rawHeaders[2] !== 'type') {
+      return {
+        isValid: false,
+        summary: { total: 0, valid: 0, invalid: 0 },
+        validRows: [],
+        invalidRows: [],
+        errors: ['Invalid CSV headers. Expected exact header: name,email,type'],
+      };
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailCounts = new Map<string, number>();
+
+    // Pass 1: Parse rows and count occurrences of each normalized email across the entire CSV
+    const parsedDataRows: Array<{
+      rowNumber: number;
+      name: string;
+      email: string;
+      rawType: string;
+      type?: 'INTERN' | 'EMPLOYEE';
+    }> = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const rowNum = i + 1;
+      const cols = this.parseCsvLine(lines[i]);
+      const name = cols[0] || '';
+      const email = (cols[1] || '').trim().toLowerCase();
+      const rawType = (cols[2] || '').trim().toUpperCase();
+
+      parsedDataRows.push({
+        rowNumber: rowNum,
+        name,
+        email,
+        rawType,
+        type: (rawType === 'INTERN' || rawType === 'EMPLOYEE') ? rawType : undefined,
+      });
+
+      if (email) {
+        emailCounts.set(email, (emailCounts.get(email) || 0) + 1);
+      }
+    }
+
+    // Pass 2: Query DB for all unique valid emails present in CSV to check conflicts
+    const uniqueValidEmails = Array.from(emailCounts.keys()).filter((e) => emailRegex.test(e));
+    const existingInDb = await prisma.user.findMany({
+      where: {
+        email: { in: uniqueValidEmails },
+      },
+      select: { email: true },
+    });
+    const existingDbEmails = new Set(existingInDb.map((u) => u.email.toLowerCase()));
+
+    const validRows: CsvRow[] = [];
+    const invalidRows: InvalidCsvRow[] = [];
+    const errors: string[] = [];
+
+    // Pass 3: Validate each row independently
+    for (const row of parsedDataRows) {
+      const { rowNumber, name, email, rawType, type } = row;
+      let failureReason = '';
+
+      if (!name) {
+        failureReason = 'Name is required.';
+      } else if (name.length > 100) {
+        failureReason = 'Name cannot exceed 100 characters.';
+      } else if (!email || !emailRegex.test(email)) {
+        failureReason = 'Invalid email format.';
+      } else if ((emailCounts.get(email) || 0) > 1) {
+        // Both rows of any internal duplicate in CSV are marked invalid
+        failureReason = 'Duplicate email in CSV.';
+      } else if (existingDbEmails.has(email)) {
+        // Email already registered in DB
+        failureReason = 'Email already exists.';
+      } else if (!type) {
+        failureReason = `Invalid type "${rawType}". Must be INTERN or EMPLOYEE.`;
+      }
+
+      if (failureReason) {
+        invalidRows.push({
+          rowNumber,
+          name: name || 'Unnamed',
+          email: email || 'No email provided',
+          reason: failureReason,
+        });
+        errors.push(`Row ${rowNumber}: ${name || 'Unnamed'} (${email || 'No email'}) - ${failureReason}`);
+      } else {
+        validRows.push({
+          rowNumber,
+          name,
+          email,
+          type: type!,
+        });
+      }
+    }
+
+    const totalDataRows = parsedDataRows.length;
+    const isValid = invalidRows.length === 0 && validRows.length === totalDataRows;
+
+    return {
+      isValid,
+      summary: {
+        total: totalDataRows,
+        valid: validRows.length,
+        invalid: invalidRows.length,
+      },
+      validRows,
+      invalidRows,
+      errors,
+    };
+  }
+
+  /**
+   * Bulk create users in an all-or-nothing transaction with pre-validation and collision safety
+   */
+  static async createUsersBulk(rows: CsvRow[], managerOrgId: string) {
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      throw new Error('No valid candidate rows provided for bulk creation.');
+    }
+
+    if (!managerOrgId) {
+      throw new Error('Manager organization context required.');
+    }
+
+    // Role lookups
+    const internRole = await prisma.role.findUnique({ where: { name: 'INTERN' } });
+    const employeeRole = await prisma.role.findUnique({ where: { name: 'EMPLOYEE' } });
+
+    if (!internRole || !employeeRole) {
+      throw new Error('INTERN or EMPLOYEE role is not configured in the system.');
+    }
+
+    // =========================================================================
+    // FINAL SERVER-SIDE REVALIDATION (Pre-Transaction)
+    // The database or batch may have changed between Preview and Confirm Import.
+    // Re-check all candidate emails against the database right before creation.
+    // =========================================================================
+    const normalizedCandidateEmails = rows.map((r) => r.email.trim().toLowerCase());
+
+    // Check for internal duplicates within the submitted batch
+    const batchEmailSet = new Set<string>();
+    const duplicateBatchEmails: string[] = [];
+    for (const email of normalizedCandidateEmails) {
+      if (batchEmailSet.has(email)) {
+        duplicateBatchEmails.push(email);
+      }
+      batchEmailSet.add(email);
+    }
+    if (duplicateBatchEmails.length > 0) {
+      const err: any = new Error(
+        `Bulk import could not be completed. Duplicate emails detected in import payload: ${duplicateBatchEmails.join(', ')}`
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Query DB for any existing emails in this candidate batch
+    const existingDbUsers = await prisma.user.findMany({
+      where: { email: { in: normalizedCandidateEmails } },
+      select: { email: true, name: true },
+    });
+
+    if (existingDbUsers.length > 0) {
+      const conflictList = existingDbUsers.map((u) => u.email);
+      const err: any = new Error(
+        `Bulk import could not be completed. One or more users became unavailable before import confirmation: ${conflictList.join(', ')}`
+      );
+      err.statusCode = 409;
+      err.conflicts = conflictList;
+      throw err;
+    }
+
+    // =========================================================================
+    // BATCH USER CODE RESERVATION
+    // Ensure every user in this batch receives a code that does not collide
+    // with DB users OR with other users in the SAME batch.
+    // =========================================================================
+    const reservedCodesInBatch = new Set<string>();
+    const usersToCreate: Array<{
+      name: string;
+      email: string;
+      user_code: string;
+      type: 'INTERN' | 'EMPLOYEE';
+      temporary_password: string;
+      password_hash: string;
+      role_id: string;
+    }> = [];
+
+    for (const row of rows) {
+      const prefix = row.type === 'INTERN' ? 'INT' : 'EMP';
+      const userCode = await this.generateUserCode(prefix, managerOrgId, reservedCodesInBatch);
+      const tempPassword = this.generateTemporaryPassword();
+      const pwdHash = await argon2.hash(tempPassword);
+      const roleId = row.type === 'INTERN' ? internRole.id : employeeRole.id;
+
+      usersToCreate.push({
+        name: row.name.trim(),
+        email: row.email.trim().toLowerCase(),
+        user_code: userCode,
+        type: row.type,
+        temporary_password: tempPassword,
+        password_hash: pwdHash,
+        role_id: roleId,
+      });
+    }
+
+    // =========================================================================
+    // ATOMIC TRANSACTION
+    // If ANY user fails or encounters a constraint, roll back completely.
+    // =========================================================================
+    try {
+      const createdUsers = await prisma.$transaction(async (tx) => {
+        const results = [];
+        for (const item of usersToCreate) {
+          const user = await tx.user.create({
+            data: {
+              name: item.name,
+              email: item.email,
+              user_code: item.user_code,
+              password_hash: item.password_hash,
+              organization_id: managerOrgId,
+              must_change_password: true,
+              is_active: true,
+            },
+          });
+
+          await tx.userRole.create({
+            data: {
+              user_id: user.id,
+              role_id: item.role_id,
+            },
+          });
+
+          results.push({
+            name: item.name,
+            email: item.email,
+            user_code: item.user_code,
+            type: item.type,
+            temporary_password: item.temporary_password,
+          });
+        }
+        return results;
+      });
+
+      return {
+        summary: {
+          total: rows.length,
+          created: createdUsers.length,
+          failed: 0,
+        },
+        created_users: createdUsers,
+      };
+    } catch (err: any) {
+      if (err.code === 'P2002') {
+        const cleanErr: any = new Error(
+          'Bulk import could not be completed. One or more users already exist or could not be assigned a unique User ID. Please review the validation results and try again.'
+        );
+        cleanErr.statusCode = 409;
+        cleanErr.details = err.meta;
+        throw cleanErr;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * List users belonging strictly to manager's organization
+   */
+  static async listUsers(managerOrgId: string, typeFilter?: string) {
+    if (!managerOrgId) {
+      throw new Error('Manager organization context required.');
+    }
+
+    const users = await prisma.user.findMany({
+      where: {
+        organization_id: managerOrgId,
+        // Exclude global SUPER_ADMIN
+        roles: {
+          none: {
+            role: { name: 'SUPER_ADMIN' },
+          },
+        },
+      },
+      include: {
+        roles: {
+          include: {
+            role: true,
+          },
+        },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    const mapped = users.map((u) => {
+      const roleName = u.roles[0]?.role?.name || 'MEMBER';
+      return {
+        id: u.id,
+        user_code: u.user_code,
+        name: u.name,
+        email: u.email,
+        type: roleName,
+        is_active: u.is_active,
+        created_at: u.created_at,
+        updated_at: u.updated_at,
+      };
+    });
+
+    let filtered = mapped;
+
+    if (typeFilter && typeFilter !== 'ALL') {
+      if (typeFilter === 'ACTIVE') {
+        filtered = filtered.filter((u) => u.is_active);
+      } else if (typeFilter === 'INACTIVE') {
+        filtered = filtered.filter((u) => !u.is_active);
+      } else if (['INTERN', 'EMPLOYEE', 'MANAGER'].includes(typeFilter)) {
+        filtered = filtered.filter((u) => u.type === typeFilter);
+      }
+    }
+
+    return filtered;
+  }
+
+  /**
+   * Manager resets user password
+   */
+  static async resetUserPassword(managerOrgId: string, targetUserId: string) {
+    if (!managerOrgId) {
+      const err: any = new Error('Manager organization context required.');
+      err.statusCode = 403;
+      throw err;
+    }
+    if (!targetUserId) {
+      const err: any = new Error('Target user ID is required.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: {
+        roles: {
+          include: { role: true },
+        },
+      },
+    });
+
+    if (!targetUser) {
+      const err: any = new Error('User not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Organization tenant isolation: target user MUST belong to the same organization
+    if (targetUser.organization_id !== managerOrgId) {
+      const err: any = new Error('Unauthorized: Target user does not belong to your organization.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    // Disallow resetting SUPER_ADMIN
+    const isSuperAdmin = targetUser.roles.some((r) => r.role.name === 'SUPER_ADMIN');
+    if (isSuperAdmin) {
+      const err: any = new Error('Cannot reset password for Super Admin.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    // Generate new secure temporary password
+    const newTempPassword = this.generateTemporaryPassword();
+    const newHash = await argon2.hash(newTempPassword);
+
+    await prisma.user.update({
+      where: { id: targetUserId },
+      data: {
+        password_hash: newHash,
+        must_change_password: true,
+      },
+    });
+
+    // Invalidate existing sessions so old sessions cannot be used
+    await prisma.userSession.deleteMany({
+      where: { user_id: targetUserId },
+    });
+
+    return {
+      user: {
+        id: targetUser.id,
+        user_code: targetUser.user_code,
+        name: targetUser.name,
+        email: targetUser.email,
+        must_change_password: true,
+      },
+      temporary_password: newTempPassword,
+    };
+  }
+
+  /**
+   * Manager deactivates organization user
+   */
+  static async deactivateUser(managerOrgId: string, targetUserId: string) {
+    if (!managerOrgId) {
+      const err: any = new Error('Manager organization context required.');
+      err.statusCode = 403;
+      throw err;
+    }
+    if (!targetUserId) {
+      const err: any = new Error('Target user ID is required.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: {
+        roles: {
+          include: { role: true },
+        },
+      },
+    });
+
+    if (!targetUser) {
+      const err: any = new Error('User not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (targetUser.organization_id !== managerOrgId) {
+      const err: any = new Error('Unauthorized: Target user does not belong to your organization.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const isSuperAdmin = targetUser.roles.some((r) => r.role.name === 'SUPER_ADMIN');
+    if (isSuperAdmin) {
+      const err: any = new Error('Cannot deactivate Super Admin.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    await prisma.user.update({
+      where: { id: targetUserId },
+      data: {
+        is_active: false,
+      },
+    });
+
+    // Invalidate active sessions
+    await prisma.userSession.deleteMany({
+      where: { user_id: targetUserId },
+    });
+
+    return {
+      success: true,
+      message: 'User deactivated successfully.',
+      user: {
+        id: targetUser.id,
+        user_code: targetUser.user_code,
+        name: targetUser.name,
+        is_active: false,
+      },
+    };
+  }
+
+  /**
+   * Authenticated user changes temporary password on first login
+   */
+  static async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    if (!currentPassword) {
+      throw new Error('Current password is required.');
+    }
+    if (!newPassword || newPassword.length < 8) {
+      throw new Error('New password must be at least 8 characters.');
+    }
+    if (currentPassword === newPassword) {
+      throw new Error('New password must be different from current password.');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || !user.is_active) {
+      throw new Error('User not found or inactive.');
+    }
+
+    const isMatch = await argon2.verify(user.password_hash, currentPassword);
+    if (!isMatch) {
+      throw new Error('Current password is incorrect.');
+    }
+
+    const newHash = await argon2.hash(newPassword);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        password_hash: newHash,
+        must_change_password: false,
+      },
+    });
+
+    return { success: true, message: 'Password changed successfully.' };
+  }
+}

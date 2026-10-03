@@ -96,13 +96,8 @@ export default function AssignedFormsTab({
           <FileText className="w-10 h-10 mx-auto mb-3 text-purple-400" />
           <h4 className="font-bold text-slate-800 text-base">No Forms Available</h4>
           <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
-            Form evaluations, progress surveys, and cohort check-ins are planned for the V2 module.
+            No forms are available yet. Your organization has not published any forms yet.
           </p>
-          <div className="mt-4">
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
-              Planned for V2
-            </span>
-          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

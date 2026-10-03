@@ -7,7 +7,10 @@ export class FormService {
     if (userRole === 'MANAGER' || userRole === 'TECH_LEAD') {
       return prisma.form.findMany({
         where: { organization_id: organizationId },
-        include: { _count: { select: { submissions: true } } },
+        include: {
+          questions: { orderBy: { order_index: 'asc' } },
+          _count: { select: { submissions: true } }
+        },
         orderBy: { created_at: 'desc' }
       });
     } else {
@@ -19,8 +22,10 @@ export class FormService {
           target_roles: { has: userRole }
         },
         include: {
+          questions: { orderBy: { order_index: 'asc' } },
           submissions: {
-            where: { submitter_id: userId }
+            where: { submitter_id: userId },
+            include: { answers: true }
           }
         },
         orderBy: { deadline: 'asc' }

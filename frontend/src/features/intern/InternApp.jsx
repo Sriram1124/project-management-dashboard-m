@@ -28,6 +28,7 @@ import DynamicFormModal from './components/DynamicFormModal';
 import WorkItemDetailModal from './components/WorkItemDetailModal';
 import CreatePersonalTaskModal from './components/CreatePersonalTaskModal';
 import NotificationsDrawer from './components/NotificationsDrawer';
+import AlertsTab from './components/AlertsTab';
 import { useAuth } from '../../context/AuthContext';
 
 import { userService } from './services/userService';
@@ -72,6 +73,7 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
 
   useEffect(() => {
     loadWorkItems();
+    notificationsService.loadNotifications();
     const unsubForms = formsService.subscribe(setForms);
     const unsubNotifs = notificationsService.subscribe(setNotifications);
 
@@ -99,6 +101,7 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'alerts', label: 'Alerts & Notices', icon: Bell, badge: unreadCount, badgeColor: 'bg-rose-500' },
     { id: 'projects', label: 'My Projects', icon: FolderKanban },
     { id: 'tasks', label: 'My Tasks', icon: CheckSquare, badge: workItems.filter(w => w.status !== 'COMPLETED').length },
     { id: 'forms', label: 'Forms', icon: FileText, badge: pendingFormsCount, badgeColor: 'bg-amber-500' },
@@ -111,6 +114,8 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
     switch (currentTab) {
       case 'dashboard':
         return 'Intern Workstation';
+      case 'alerts':
+        return 'Organization Alerts & Notices';
       case 'projects':
         if (selectedProjectId) {
           const p = projectsService.getProjectById(selectedProjectId);
@@ -306,6 +311,13 @@ export default function InternApp({ onLogout, onSelectProject, onToast }) {
                   setCurrentTab('projects');
                 }}
                 onToggleTask={handleToggleTask}
+              />
+            )}
+ 
+            {currentTab === 'alerts' && (
+              <AlertsTab
+                notifications={notifications}
+                onToast={onToast}
               />
             )}
 

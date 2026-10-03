@@ -7,9 +7,23 @@ const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'refresh_secret';
 const ACCESS_EXPIRY = process.env.ACCESS_TOKEN_EXPIRY || '15m';
 
 export class AuthService {
-  static async login(email: string, password: string, userAgent?: string, ipAddress?: string) {
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+  static async login(
+    identifier: string,
+    password: string,
+    organizationId?: string | null,
+    userAgent?: string,
+    ipAddress?: string
+  ) {
+    const cleanIdentifier = identifier.trim();
+    const normalizedEmail = cleanIdentifier.toLowerCase();
+
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: normalizedEmail },
+          { user_code: cleanIdentifier }
+        ]
+      },
       include: {
         roles: {
           include: {
@@ -38,6 +52,21 @@ export class AuthService {
     const isValid = await argon2.verify(user.password_hash, password);
     if (!isValid) {
       throw new Error('Invalid credentials');
+    }
+
+    // Role verification & tenant isolation
+    const isSuperAdmin = user.roles.some((r: any) => r.role?.name === 'SUPER_ADMIN');
+
+    if (isSuperAdmin) {
+      // Super Admin is root/global (organization_id is null); cannot log in under a tenant organization
+      if (organizationId) {
+        throw new Error('Invalid credentials');
+      }
+    } else {
+      // Organization user MUST provide organization_id and it MUST match user.organization_id exactly
+      if (!organizationId || user.organization_id !== organizationId) {
+        throw new Error('Invalid credentials');
+      }
     }
 
     const primaryRole = user.roles[0]?.role;

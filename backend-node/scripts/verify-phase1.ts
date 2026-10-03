@@ -40,6 +40,9 @@ async function main() {
   let createdManagerEmail = `auto.mgr.${Date.now()}@testorg.com`;
   let createdManagerTempPassword = '';
 
+  const dailoqa = await prisma.organization.findFirst({ where: { name: { contains: 'Dailoqa' } } });
+  const dailoqaId = dailoqa?.id;
+
   // 1. Super Admin Login
   await runTest('1. Super Admin Authentication & Profile', async () => {
     const res = await fetch(`${API_BASE}/auth/login`, {
@@ -77,7 +80,8 @@ async function main() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: 'manager@dailoqa.com',
-        password: 'password123'
+        password: 'password123',
+        organization_id: dailoqaId
       })
     });
 
@@ -172,7 +176,8 @@ async function main() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: createdManagerEmail,
-        password: createdManagerTempPassword
+        password: createdManagerTempPassword,
+        organization_id: createdOrgId
       })
     });
 
@@ -259,7 +264,8 @@ async function main() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: 'intern@dailoqa.com',
-        password: 'password123'
+        password: 'password123',
+        organization_id: dailoqaId
       })
     });
     assert(internRes.status === 200, `Intern login failed with ${internRes.status}`);
